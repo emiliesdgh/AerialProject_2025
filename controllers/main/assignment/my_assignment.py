@@ -39,12 +39,16 @@ position = "start"
 initial = np.zeros(4)
 second = np.zeros(4)
 way_point1 = np.zeros(3)
+way_point1W = np.zeros(3)
 R_initial = np.zeros(3)
+
+TPC1 = np.zeros(2)
+TPC2 = np.zeros(2)
 
 start_time = time.time()
 
 def get_command(sensor_data, camera_data, dt):
-    global starting_position, second_position, pink_direction, position, start_time, initial, second, way_point1, R_initial
+    global starting_position, second_position, pink_direction, position, start_time, initial, second, way_point1, R_initial,TPC1, TPC2,way_point1W
 
     # NOTE: Displaying the camera image with cv2.imshow() will throw an error because GUI operations should be performed in the main thread.
     # If you want to display the camera image you can call it main.py.
@@ -115,7 +119,7 @@ def get_command(sensor_data, camera_data, dt):
     # print("in get_command")
     # print(dt)
     deltaTime = time.time() - start_time 
-    # print(deltaTime)
+    print(deltaTime)
     if deltaTime < 5:
 
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
@@ -126,12 +130,19 @@ def get_command(sensor_data, camera_data, dt):
         R_initial = [sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]
         initial = np.array([x_initial, y_initial, z_initial])
 
-    elif deltaTime < 7:
+        pink_center_initial = detect_pink(camera_data)
+        print("pink_center_initial : ", pink_center_initial)
+        TPC1 = pink_center_initial
 
-        control_command = [sensor_data['x_global'], sensor_data['y_global'] - 0.1, 1.0, sensor_data['yaw']+0.1]
+    elif deltaTime < 7 and deltaTime > 5:
 
-    elif deltaTime < 8:
+        control_command = [sensor_data['x_global'], 3.5, 1.0, sensor_data['yaw']+0.01]
+        # print("sensor data before moving")
+        # print(sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw'])
 
+    elif deltaTime < 8 and deltaTime > 7:
+
+        # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
         x_second = sensor_data['x_global']
         y_second = sensor_data['y_global']
@@ -139,22 +150,33 @@ def get_command(sensor_data, camera_data, dt):
         yaw_second = sensor_data['yaw']
         second = np.array([x_second, y_second, z_second])
 
+        pink_center_second = detect_pink(camera_data)
+        print("pink_center_second : ", pink_center_second)
+        TPC2 = pink_center_second
+
         print("triangulate")
 
         ## not the right coordinates... hmmm 
-        way_point1 = triangulate(sensor_data, camera_data, dt, initial, second, R_initial)
-        dy = way_point1[1] - y_second 
-        way_point1[1] = y_second - dy
+        way_point1 = triangulate(sensor_data, camera_data, dt, initial, second, R_initial, TPC1, TPC2)
+
+        way_point1W = C2W(R_initial, way_point1)
+        # dy = way_point1[1] - y_second 
+        # way_point1[1] = y_second - dy
         # way_point1 = np.array([x_second + way_point1[0], y_second - way_point1[1], 1.0])
 
-    print("way_point1 : ", way_point1)
+    
+
+        print("way_point1 : ", way_point1)
+        print("way_point1W : ", way_point1W)
     if deltaTime > 8:
-        control_command = [way_point1[0], way_point1[1], 1.0, sensor_data['yaw']]
+        print("over time 8")
+
+        control_command = [way_point1W[0], way_point1W[1], 1.0, sensor_data['yaw']]
     # if position == "start" :
     #     control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
     #     print("in start")
         
-    
+    # print(camera_data.shape)
     # if position == "second" :
     #     control_command = [sensor_data['x_global'], sensor_data['y_global'] - 0.1, 1.0, sensor_data['yaw']]
     #     print("in second")
@@ -166,7 +188,7 @@ def get_command(sensor_data, camera_data, dt):
 
     return control_command # Ordered as array with: [pos_x_cmd, pos_y_cmd, pos_z_cmd, yaw_cmd] in meters and radianss
 
-def triangulate(sensor_data, camera_data, dt, P, Q, R) :
+def triangulate(sensor_data, camera_data, dt, P, Q, R, TPC1, TPC2) :
     f_pixel = 300/(2*np.tan(1.5/2))
     # alpha = 1
     # beta = 1
@@ -190,11 +212,16 @@ def triangulate(sensor_data, camera_data, dt, P, Q, R) :
                         [np.sin(euler_angles[2]), np.cos(euler_angles[2]), 0],
                         [0, 0, 1]])
     
-    # R = (R_yaw @ R_pitch @ R_roll).T
-    R = (R_yaw @ R_pitch @ R_roll)
+    R = (R_yaw @ R_pitch @ R_roll).T
+    # R = (R_yaw @ R_pitch @ R_roll)
 
-    v = R @ np.array([P[0], P[1], 0])
-    v_prim = R @ np.array([Q[0], Q[1], 0])
+    ## using sensor data
+    # v = R @ np.array([P[0], P[1], 0])
+    # v_prim = R @ np.array([Q[0], Q[1], 0])
+
+    ## using pink center from camera data
+    v = R @ np.array([TPC1[0], TPC1[1], 0])
+    v_prim = R @ np.array([TPC2[0], TPC2[1], 0])
 
     r = R @ v
     s = R @ v_prim
@@ -203,13 +230,30 @@ def triangulate(sensor_data, camera_data, dt, P, Q, R) :
                   [np.dot(r,s) , -np.dot(s,s)]])
     # print(A.shape)
 
-    b = np.array([[np.dot((P - Q), r)], 
-                  [np.dot((P - Q), s)]])
+    ## using sensor data
+    # b = np.array([[np.dot((P - Q), r)], 
+    #               [np.dot((P - Q), s)]])
+
+    ## using pink center from camera data
+    b = np.array([[np.dot((TPC1 - TPC2), r)], 
+                  [np.dot((TPC1 - TPC2), s)]])
     
     alpha, beta = np.linalg.inv(A) @ b
 
-    F = P + alpha * r
-    G = Q + beta * s
+    # ## Tuning alpha and beta
+    # print("alpha : ", alpha, "beta : ", beta)
+
+    # alpha = alpha + 0.1
+    # beta = beta + 0.1
+    # print("alpha : ", alpha, "beta : ", beta)
+
+    ## using sensor data
+    # F = P + alpha * r
+    # G = Q + beta * s
+
+    ## using pink center from camera data
+    F = TPC1 + alpha * r
+    G = TPC2 + beta * s
 
     H = (F + G)/2 
 
@@ -218,6 +262,28 @@ def triangulate(sensor_data, camera_data, dt, P, Q, R) :
     # print("H : ", H)
     # print("alpha : ", alpha, "beta : ", beta)
     return H
+
+def C2W(R, point) :
+    euler_angles = [R[0], R[1], R[2]]
+
+    R_roll = np.array([ [1, 0, 0], 
+                        [0, np.cos(euler_angles[0]), -np.sin(euler_angles[0])],
+                        [0, np.sin(euler_angles[0]), np.cos(euler_angles[0])]])
+    
+    R_pitch = np.array([[np.cos(euler_angles[1]), 0, np.sin(euler_angles[1])],
+                        [0, 1, 0],
+                        [-np.sin(euler_angles[1]), 0, np.cos(euler_angles[1])]])
+    
+    R_yaw = np.array([ [np.cos(euler_angles[2]), -np.sin(euler_angles[2]), 0],
+                        [np.sin(euler_angles[2]), np.cos(euler_angles[2]), 0],
+                        [0, 0, 1]])
+    
+    R = (R_yaw @ R_pitch @ R_roll)
+
+    point = point @ R
+
+    return point
+
 
 # def get_waypoints(sensor_data, camera_data, dt) :
 
@@ -229,22 +295,23 @@ def triangulate(sensor_data, camera_data, dt, P, Q, R) :
 
 #     return sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], 1.0, sensor_data['yaw']
 
-# def detect_pink(camera_data):
-#     # Convert image to HSV (adjust parameters based on your actual pink color range)
-#     imgHSV = cv2.cvtColor(camera_data, cv2.COLOR_BGR2HSV)
-#     lower_pink = np.array([140, 100, 100])
-#     upper_pink = np.array([160, 255, 255])
-#     mask = cv2.inRange(imgHSV, lower_pink, upper_pink)
+def detect_pink(camera_data):
+    # Convert image to HSV (adjust parameters based on your actual pink color range)
+    imgHSV = cv2.cvtColor(camera_data, cv2.COLOR_BGR2HSV)
+    lower_pink = np.array([140, 100, 100])
+    upper_pink = np.array([160, 255, 255])
+    mask = cv2.inRange(imgHSV, lower_pink, upper_pink)
     
-#     # Find contours in the mask
-#     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-#     for contour in contours:
-#         if cv2.contourArea(contour) > 100:  # Minimum area to avoid small noises
-#             x, y, w, h = cv2.boundingRect(contour)
-#             print(x + w/2, y + h/2)
-#             return (x + w/2, y + h/2)  # Return the center of the pink square
+    # Find contours in the mask
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    for contour in contours:
+        if cv2.contourArea(contour) > 100:  # Minimum area to avoid small noises
+            x, y, w, h = cv2.boundingRect(contour)
+            # print(x + w/2, y + h/2)
+            center = np.array([x + w/2, y + h/2, 1.0])
+            return center  # Return the center of the pink square
 
-#     return None
+    return None
 
 # ## function to determine where the pink square is to the drone
 # def direction_to_pink(camera_data):
