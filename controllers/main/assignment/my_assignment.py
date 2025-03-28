@@ -39,11 +39,12 @@ position = "start"
 initial = np.zeros(4)
 second = np.zeros(4)
 way_point1 = np.zeros(3)
+R_initial = np.zeros(3)
 
 start_time = time.time()
 
 def get_command(sensor_data, camera_data, dt):
-    global starting_position, second_position, pink_direction, position, start_time, initial, second, way_point1
+    global starting_position, second_position, pink_direction, position, start_time, initial, second, way_point1, R_initial
 
     # NOTE: Displaying the camera image with cv2.imshow() will throw an error because GUI operations should be performed in the main thread.
     # If you want to display the camera image you can call it main.py.
@@ -116,15 +117,21 @@ def get_command(sensor_data, camera_data, dt):
     deltaTime = time.time() - start_time 
     # print(deltaTime)
     if deltaTime < 5:
+
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
         x_initial = sensor_data['x_global']
         y_initial = sensor_data['y_global']
         z_initial = sensor_data['z_global']
         yaw_initial = sensor_data['yaw']
+        R_initial = [sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]
         initial = np.array([x_initial, y_initial, z_initial])
+
     elif deltaTime < 7:
+
         control_command = [sensor_data['x_global'], sensor_data['y_global'] - 0.1, 1.0, sensor_data['yaw']+0.1]
+
     elif deltaTime < 8:
+
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
         x_second = sensor_data['x_global']
         y_second = sensor_data['y_global']
@@ -135,7 +142,7 @@ def get_command(sensor_data, camera_data, dt):
         print("triangulate")
 
         ## not the right coordinates... hmmm 
-        way_point1 = triangulate(sensor_data, camera_data, dt, initial, second)
+        way_point1 = triangulate(sensor_data, camera_data, dt, initial, second, R_initial)
 
     print("way_point1 : ", way_point1)
     if deltaTime > 8:
@@ -156,7 +163,7 @@ def get_command(sensor_data, camera_data, dt):
 
     return control_command # Ordered as array with: [pos_x_cmd, pos_y_cmd, pos_z_cmd, yaw_cmd] in meters and radianss
 
-def triangulate(sensor_data, camera_data, dt, P, Q) :
+def triangulate(sensor_data, camera_data, dt, P, Q, R) :
     f_pixel = 300/(2*np.tan(1.5/2))
     # alpha = 1
     # beta = 1
@@ -165,7 +172,8 @@ def triangulate(sensor_data, camera_data, dt, P, Q) :
     # print(f_pixel)
     # print(P.shape)
     # print(Q.shape)
-    euler_angles = [sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]
+    # euler_angles = [sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]
+    euler_angles = [R[0], R[1], R[2]]
 
     R_roll = np.array([ [1, 0, 0], 
                         [0, np.cos(euler_angles[0]), -np.sin(euler_angles[0])],
@@ -176,13 +184,14 @@ def triangulate(sensor_data, camera_data, dt, P, Q) :
                         [-np.sin(euler_angles[1]), 0, np.cos(euler_angles[1])]])
     
     R_yaw = np.array([ [np.cos(euler_angles[2]), -np.sin(euler_angles[2]), 0],
-                          [np.sin(euler_angles[2]), np.cos(euler_angles[2]), 0],
-                          [0, 0, 1]])
+                        [np.sin(euler_angles[2]), np.cos(euler_angles[2]), 0],
+                        [0, 0, 1]])
     
-    R = R_yaw @ R_pitch @ R_roll
+    # R = (R_yaw @ R_pitch @ R_roll).T
+    R = (R_yaw @ R_pitch @ R_roll)
 
-    v = np.array([P[0], P[1], 0])
-    v_prim = np.array([Q[0], Q[1], 0])
+    v = R @ np.array([P[0], P[1], 0])
+    v_prim = R @ np.array([Q[0], Q[1], 0])
 
     r = R @ v
     s = R @ v_prim
