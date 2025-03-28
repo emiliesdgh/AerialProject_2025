@@ -143,6 +143,9 @@ def get_command(sensor_data, camera_data, dt):
 
         ## not the right coordinates... hmmm 
         way_point1 = triangulate(sensor_data, camera_data, dt, initial, second, R_initial)
+        dy = way_point1[1] - y_second 
+        way_point1[1] = y_second - dy
+        # way_point1 = np.array([x_second + way_point1[0], y_second - way_point1[1], 1.0])
 
     print("way_point1 : ", way_point1)
     if deltaTime > 8:
@@ -209,6 +212,8 @@ def triangulate(sensor_data, camera_data, dt, P, Q, R) :
     G = Q + beta * s
 
     H = (F + G)/2 
+
+    # H = np.array([H[0], -H[1], 1.0])
 
     # print("H : ", H)
     # print("alpha : ", alpha, "beta : ", beta)
