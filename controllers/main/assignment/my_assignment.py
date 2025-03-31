@@ -2,10 +2,9 @@ import numpy as np
 import time
 import cv2
 
-from exercises.ex3_motion_planner import MotionPlanner3D as MP
-from lib.a_star_3D import AStar3D
-from lib.mapping_and_planning_examples import path_planning as PP
-from main import CrazyflieInDroneDome as Drone
+import exercises.ex0_rotations as rot
+
+
 # The available ground truth state measurements can be accessed by calling sensor_data[item]. 
 # All values of "item" are provided as defined in main.py within the function read_sensors. 
 # The "item" values that you may later retrieve for the hardware project are:
@@ -36,21 +35,27 @@ starting_position = True
 second_position = True
 pink_direction = None
 position = "start"
-initial = np.zeros(4)
-second = np.zeros(4)
+
+initial_pos = np.zeros(4)
+second_pos = np.zeros(4)
+
 way_point1 = np.zeros(3)
 way_point1W = np.zeros(3)
-R_initial = np.zeros(3)
+R_initial = np.eye(3)
+R_second = np.eye(3)
 
-TPC1 = np.zeros(2)
-TPC2 = np.zeros(2)
+X_Y_MAX = 8.0 # meters
+res_pos = 0.035 # meters
+grid_size = (int(X_Y_MAX/res_pos), int(X_Y_MAX/res_pos))
+
+pink1 = np.zeros(3)
+pink2 = np.zeros(3)
 
 start_time = time.time()
 
 def get_command(sensor_data, camera_data, dt):
-    global starting_position, second_position, pink_direction, position, start_time, initial, second, way_point1, R_initial,TPC1, TPC2,way_point1W
+    global starting_position, second_position, pink_direction, position, start_time, initial_pos, second_pos, way_point1, R_initial, R_second, pink1, pink2, way_point1W
 
-    camera = camera_data.copy()
     # NOTE: Displaying the camera image with cv2.imshow() will throw an error because GUI operations should be performed in the main thread.
     # If you want to display the camera image you can call it main.py.
 
@@ -60,98 +65,32 @@ def get_command(sensor_data, camera_data, dt):
         return control_command
 
     # ---- YOUR CODE HERE ----
-    # camera_data = np.array(camera_data)
-    # print(camera_data.shape)
-    # print(camera_data[0])
+    camera = camera_data.copy()
 
-    # get_waypoints(sensor_data, camera_data, dt)
-
-    # control_command = [0,0,0,0] # bring drone to origin
-    # control_command = get_waypoints(sensor_data, camera_data, dt)
-    # posInit = initial_position(sensor_data)
-
-    # # pink_x, pink_y = detect_pink(camera_data)
-    # # direction_to_pink(camera_data)
-
-    # # if pink_direction == "left":
-    # #     direction = [sensor_data['x_global'], sensor_data['y_global'] - 0.1, 1.0, sensor_data['yaw']]
-    # # elif pink_direction == "right":
-    # #     direction = [sensor_data['x_global'], sensor_data['y_global'] + 0.1, 1.0, sensor_data['yaw']]
-    
-    # # # if distance_to_pink(sensor_data, camera_data) > 0.1:
-    # # while(pink_direction == "left") :
-    # #     direction = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']+angle_to_pink(sensor_data, camera_data)]
-    # # if pink_direction == None :
-    # #     direction = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
-    # if pink_direction == "above":
-    #     control_command = [sensor_data['x_global'] - 0.1, sensor_data['y_global'], 1.0, sensor_data['yaw']]
-    # elif pink_direction == "below":
-    #     control_command = [sensor_data['x_global'] + 0.1, sensor_data['y_global'], 1.0, sensor_data['yaw']]
-    # control_command = direction  
-
-
-    # triangulate(sensor_data, camera_data, dt)   
-
-    # if position == "start" :
-    #     control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]   
-    #     print("in first if")
-    #     position = "second" 
-    #     # x_current, y_current, z_current, yaw_current
-    #     current_sensor_data = sensor_data
-    #     # starting_position = False
-    #     # second_position = True
-    # print(sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw'])
-    # print("current current points : ", current_sensor_data)
-  
-    # x_toGo, y_toGo, z_toGo, yaw_toGo = triangulate(current_sensor_data, camera_data, dt)
-    # print(x_toGo, y_toGo, z_toGo, yaw_toGo)
-    # print("HEEERREE 333333")
-    # # second_position = False
-    # position = None
-    
-    # control_command = [x_toGo, y_toGo, z_toGo, yaw_toGo]         
-    # # control_command = [pink_x, pink_y, 1.0, sensor_data['yaw']]
-    # print(position)
-
-
-
-
-    #####
-    # print("in get_command")
-    # print(dt)
     deltaTime = time.time() - start_time 
     # print(deltaTime)
     if deltaTime < 5:
 
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
-        # x_initial = sensor_data['x_global']
-        # y_initial = sensor_data['y_global']
-        # z_initial = sensor_data['z_global']
-        # yaw_initial = sensor_data['yaw']
-        # R_initial = [sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]
-        # initial = np.array([x_initial, y_initial, z_initial])
-
-        # pink_center_initial = detect_pink(camera_data)
-        # print("pink_center_initial : ", pink_center_initial)
-        # TPC1 = C2W(R_initial, pink_center_initial)
-        # TPC1 = pink_center_initial
-        # print("TPC1 : ", TPC1)
-
-        # if starting_position :
-        #     pink_center_initial = detect_pink(camera_data)
-        #     starting_position = False
+        
 
     elif deltaTime < 7 and deltaTime > 5:
         if starting_position :
-            pink_center_initial = detect_pink(camera)
-            TPC1 = pink_center_initial
-            print("TPC1 : ", TPC1)
-            x_initial = sensor_data['x_global']
-            y_initial = sensor_data['y_global']
-            z_initial = sensor_data['z_global']
-            yaw_initial = sensor_data['yaw']
-            R_initial = [sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]
-            initial = np.array([x_initial, y_initial, z_initial])
+            R_initial = C2W([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
+            print("R_initial : ", R_initial.shape)
+            initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
+            print("initial_pos : ", initial_pos)
+            
+            pink1 = detect_pink(camera)
+            # print("pink1 cam : ", pink1)
+           
+            ## convert pink1 to world frame, the 2 options are the same
+            # pink1 = C2W(R_initial) @ pink1
+            # pink1 = pink1 @ C2W(R_initial).T 
+            print("pink1 world : ", pink1)
+            # pink1 = rot.quaternion2rotmat([sensor_data['q_x'], sensor_data['q_y'], sensor_data['q_z'], sensor_data['q_w']]).T @ pink1
+            # print("pink1 world : ", pink1)
+            
             starting_position = False
 
         control_command = [0.75, 3.5, 1.0, sensor_data['yaw']+0.05]
@@ -162,34 +101,25 @@ def get_command(sensor_data, camera_data, dt):
 
         # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
-        # x_second = sensor_data['x_global']
-        # y_second = sensor_data['y_global']
-        # z_second = sensor_data['z_global']
-        # yaw_second = sensor_data['yaw']
-        # second = np.array([x_second, y_second, z_second])
-
-        # pink_center_second = detect_pink(camera_data)
-        # print("pink_center_second : ", pink_center_second)
-        # # TPC2 = C2W(R_initial, pink_center_second)
-        # TPC2 = pink_center_second
-        # print("TPC2 : ", TPC2)
-
-        
-
-        ## not the right coordinates... hmmm 
+       
         if second_position :
-            x_second = sensor_data['x_global']
-            y_second = sensor_data['y_global']
-            z_second = sensor_data['z_global']
-            yaw_second = sensor_data['yaw']
-            second = np.array([x_second, y_second, z_second])
+            R_second = C2W([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
+            second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
+            print("second_pos : ", second_pos)
 
-            pink_center_second = detect_pink(camera)
-            print("pink_center_second : ", pink_center_second)
-            # TPC2 = C2W(R_initial, pink_center_second)
-            TPC2 = pink_center_second
-            print("TPC2 : ", TPC2)
-            way_point1 = triangulate(R_initial, initial, second, TPC1, TPC2)
+            pink2 = detect_pink(camera)
+            # print("pink2 : ", pink2)
+            ## convert pink1 to world frame
+            # pink2 = C2W(R_second) @ pink2
+            # pink2 = pink2 @ C2W(R_second).T
+            # print("pink2 world : ", pink2)
+
+            # pink2 = pink2 @ C2W(R_second)
+            print("pink2 world : ", pink2)
+
+            way_point1 = triangulate(R_initial, R_second, initial_pos, second_pos, pink1, pink2)
+            print("way_point1 : ", way_point1)
+
             second_position = False
 
         # way_point1W = C2W(R_initial, way_point1)
@@ -197,133 +127,142 @@ def get_command(sensor_data, camera_data, dt):
         # way_point1[1] = y_second - dy
         # way_point1 = np.array([x_second + way_point1[0], y_second - way_point1[1], 1.0])
 
-    
 
-        print("way_point1 : ", way_point1)
+        # print("way_point1 : ", way_point1)
         # print("way_point1W : ", way_point1W)
     if deltaTime > 8.5:
-        print("over time 8")
-        # C2W(initial, second, TPC1, TPC2)
+        # print("over time 8")
 
         control_command = [way_point1[0], way_point1[1], way_point1[2], sensor_data['yaw']]
-    # if position == "start" :
-    #     control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
-    #     print("in start")
-        
-    # print(camera_data.shape)
-    # if position == "second" :
-    #     control_command = [sensor_data['x_global'], sensor_data['y_global'] - 0.1, 1.0, sensor_data['yaw']]
-    #     print("in second")
-    #     position = "third"
-
-    # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
-    
-    # position = "second"
+ 
     
     return control_command # Ordered as array with: [pos_x_cmd, pos_y_cmd, pos_z_cmd, yaw_cmd] in meters and radianss
 
-def triangulate(R_init, initial, second, TPC1, TPC2) :
+
+
+def triangulate(R1, R2, initial_pos, second_pos, pink1, pink2) :
     W = 300
     vz = W/(2*np.tan(1.5/2))
-    print("triangulate")
 
-    # R = np.eye(3)
-    R = np.eye(3)
+    v1 = np.array([pink1[0], pink1[1], vz])
+    v2 = np.array([pink2[0], pink2[1], vz])
+    # v1 = np.reshape(v1, (3,1))
+    # v2 = np.reshape(v2, (3,1))
+    v1 = v1/np.linalg.norm(v1)
+    v2 = v2/np.linalg.norm(v2)
 
-    euler_angles = [R_init[0], R_init[1], R_init[2]]
+    C1 = np.array([initial_pos[0]+0.03, initial_pos[1], initial_pos[2]+0.01])
+    C2 = np.array([second_pos[0]+0.03, second_pos[1], second_pos[2]+0.01])
 
-    R_roll = np.array([ [1, 0, 0], 
-                        [0, np.cos(euler_angles[0]), -np.sin(euler_angles[0])],
-                        [0, np.sin(euler_angles[0]), np.cos(euler_angles[0])]])
-    
-    R_pitch = np.array([[np.cos(euler_angles[1]), 0, np.sin(euler_angles[1])],
-                        [0, 1, 0],
-                        [-np.sin(euler_angles[1]), 0, np.cos(euler_angles[1])]])
-    
-    R_yaw = np.array([ [np.cos(euler_angles[2]), -np.sin(euler_angles[2]), 0],
-                        [np.sin(euler_angles[2]), np.cos(euler_angles[2]), 0],
-                        [0, 0, 1]])
-    
-    R = (R_yaw @ R_pitch @ R_roll)
+    # d1 = v1/np.linalg.norm(v1)
+    # d2 = v2/np.linalg.norm(v2)
 
-    # v1 = np.array([TPC1[0] - (W/2), TPC1[1] - (W/2), vz])
-    # v2 = np.array([TPC2[0] - (W/2), TPC2[1] - (W/2), vz])
+    # A = np.vstack((d1, d2)).T
+    # b = C2 - C1
 
-    v1 = np.array([TPC1[0], TPC1[1], vz])
-    v2 = np.array([TPC2[0], TPC2[1], vz])
+    # lambdas = np.linalg.lstsq(A, b, rcond=None)[0]
+    # lambda1, lambda2 = lambdas
 
-    # r = R @ v1
-    # s = R @ v2
-    r = v1
-    s = v2
+    # p1 = C1 + lambda1 * d1
+    # p2 = C2 + lambda2 * d2
 
-    C1 = np.array([initial[0]+0.03, initial[1]+0, initial[2]+0.01])
-    C2 = np.array([second[0]+0.03, second[1]+0, second[2]+0.01])
+    # print("R1 : ", R1.shape)
+    # print("v1 : ", v1.shape)
 
-    # v = R @ np.array([TPC1[0], TPC1[1], vz])
-    # v_prim = R @ np.array([TPC2[0], TPC2[1], vz])
-    # r = R @ v
-    # s = R @ v_prim
+    r = R1 @ v1
+    s = R2 @ v2
+    print("r : ", r)
+    print("s : ", s)
+
+    # P = np.array([initial_pos[0]+0.03, initial_pos[1]+0, initial_pos[2]+0.01])
+    # Q = np.array([second_pos[0]+0.03, second_pos[1]+0, second_pos[2]+0.01])
+
+    # P = np.array([initial_pos[0], initial_pos[1], initial_pos[2]])
+    # Q = np.array([second_pos[0], second_pos[1], second_pos[2]])
 
     A = np.array([[np.dot(r,r) , -np.dot(s,r)],
                   [np.dot(r,s) , -np.dot(s,s)]])
+    # print("A : ", A.shape)
 
-    # b = np.array([[np.dot((TPC1 - TPC2), r)], 
-    #               [np.dot((TPC1 - TPC2), s)]])
+    # b = np.array([[np.dot((pink1 - pink2), r)], 
+    #               [np.dot((pink1 - pink2), s)]])
+    b1 = np.dot((pink2 - pink1), r)
+    b2 = np.dot((pink2 - pink1), s)
+
+    # print("pink2-pink1 : ", pink2-pink1, " r : ", r)
+
+    # b1 = np.dot((Q - P), r)
+    # b2 = np.dot((Q - P), s)
+    # print("b1 : ", b1, " b2 : ", b2)
+    b = np.array([b1, b2])
+    # b = np.array([[np.dot((C1 - C2), r)], 
+    #               [np.dot((C1 - C2), s)]])
     
-    b = np.array([[np.dot((C1 - C2), r)], 
-                  [np.dot((C1 - C2), s)]])
+    print("A : ", A)
+    print("b : ", b)
+    # print("b : ", b.shape)
 
     # A = np.column_stack((r, -s))
     # b = C2 - C1
     
-    alpha, beta = np.linalg.inv(A) @ b
-    # alpha, beta = np.linalg.lstsq(A, b, rcond=None)[0]
+    # alpha, beta = np.linalg.inv(A) @ b
+    alpha, beta = A @ b
+    # gamma = np.linalg.inv(A) #@ b
+    # print("gamma : ", gamma)
+    alpha = alpha + 1.5
+    beta = beta + 0.5
+    # gamma = np.linalg.lstsq(A, b, rcond=None)[0]
+    # print("gamma : ", gamma)
+    print("alpha : ", alpha, " beta : ", beta)
+    print("C1 : ", C1)
+    print("C2 : ", C2)
 
-    # F = TPC1 + alpha * r
-    # G = TPC2 + beta * s
     F = C1 + alpha * r
+    # F = R1 @ F
     G = C2 + beta * s
+    print("F1 : ", F)
+    print("G1 : ", G)
+    alpha = alpha - 1.5
+    beta = beta + 0.5
+
+    F = C1 + alpha * r
+    # F = R1 @ F
+    G = C2 + beta * s
+    # G = R2 @ G
+    print("F2 : ", F)
+    print("G2 : ", G)
 
     H = (F + G)/2 
-    print("H : ", H)
+    # H = (p1 + p2)/2
+    print("to go to for waypoint1 : ", H)
 
     return H
 
-def C2W(initial, second, TPC1, TPC2) :
-    W = 300
-    f_pixel = W/(2*np.tan(1.5/2))
+def C2W(rotationMat) :
+    R = np.eye(3)
 
-    cx, cy = W/2, W/2
+    # Convert angles to radians
+    roll = np.radians(rotationMat[0])
+    pitch = np.radians(rotationMat[1])
+    yaw = np.radians(rotationMat[2])
 
-    K = np.array([[f_pixel, 0, cx],
-                  [0, f_pixel, cy],
-                  [0, 0, 1]], dtype=np.float32)
-    world = np.array([[initial],
-                      [second]], dtype=np.float32)
-    point = np.array([[TPC1], 
-                      [TPC2]], dtype=np.float32)
+    # Create rotation matrices
+    R_yaw = np.array([[np.cos(yaw), -np.sin(yaw), 0],
+                      [np.sin(yaw), np.cos(yaw), 0],
+                      [0, 0, 1]])
+    
+    R_pitch = np.array([[np.cos(pitch), 0, np.sin(pitch)],
+                        [0, 1, 0],
+                        [-np.sin(pitch), 0, np.cos(pitch)]])
 
-    success, R, T = cv2.solvePnP(world, point, K, None)
-    if success :
-        print("success")
-        print("R : ", R)
-        print("T : ", T)
-    # # R = np.eye(3)
-    # # euler_angles = [R_init[0], R_init[1], R_init[2]]
-    # # R_roll = np.array([ [1, 0, 0], 
-    # #                     [0, np.cos(euler_angles[0]), -np.sin(euler_angles[0])],
-    # #                     [0, np.sin(euler_angles[0]), np.cos(euler_angles[0])]])
-    # # R_pitch = np.array([[np.cos(euler_angles[1]), 0, np.sin(euler_angles[1])],
-    # #                     [0, 1, 0],
-    # #                     [-np.sin(euler_angles[1]), 0, np.cos(euler_angles[1])]])
-    # # R_yaw = np.array([ [np.cos(euler_angles[2]), -np.sin(euler_angles[2]), 0],
-    # #                     [np.sin(euler_angles[2]), np.cos(euler_angles[2]), 0],
-    # #                     [0, 0, 1]])
-    # # R = (R_yaw @ R_pitch @ R_roll)
-    # # point = R @ point
-
-    return point
+    R_roll = np.array([[1, 0, 0],
+                       [0, np.cos(roll), -np.sin(roll)],
+                       [0, np.sin(roll), np.cos(roll)]])
+    
+    # Calculate the rotation matrix
+    R = R_yaw @ R_pitch @ R_roll
+    # print("R : ", R)
+    return R
 
 
 # def get_waypoints(sensor_data, camera_data, dt) :
@@ -343,10 +282,6 @@ def detect_pink(camera_data):
     upper_pink = np.array([160, 255, 255])
     mask = cv2.inRange(imgHSV, lower_pink, upper_pink)
 
-    # cv2.rectangle(imgHSV, (150, 150), (160, 160), (0, 0, 255), 2)
-    # cv2.imshow("Image with pink square", imgHSV)
-    # cv2.waitKey(1)
-
     originX = 150
     originY = 150
     
@@ -356,13 +291,9 @@ def detect_pink(camera_data):
         if cv2.contourArea(contour) > 100:  # Minimum area to avoid small noises
             x, y, w, h = cv2.boundingRect(contour)
             # print(x + w/2, y + h/2)
-            center = np.array([x + w/2, y + h/2, 1.0])
-            # cv2.circle(camera_data, (int(center[0]), int(center[1])), 5, (0, 0, 255), -1)
-            print("x : ", x, "y : ", y)
-            print("w : ", w, "h : ", h)
-            print("center : ", center)
-            print("new center : ", center[0] - originX, center[1] - originY)
-            new_center = np.array([center[0] - originX, center[1] - originY])
+            center = np.array([x + w/2, y + h/2])
+
+            new_center = np.array([center[0] - originX, center[1] - originY, 1.0])
             return new_center  # Return the center of the pink square
 
     return None
@@ -387,9 +318,9 @@ def detect_pink(camera_data):
 #     #     print("Pink square is below")
 #     #     pink_direction = "below"
 
-# def distance_to_pink(sensor_data, camera_data):
-#     pink_x, pink_y = detect_pink(camera_data)
-#     return np.sqrt((sensor_data['x_global'] - pink_x)**2 + (sensor_data['y_global'] - pink_y)**2)
+# def distance_to_pink(sensor_data, TPC):
+#     # pink_x, pink_y = detect_pink(camera_data)
+#     return np.sqrt((sensor_data['x_global'] - TPC[0])**2 + (sensor_data['y_global'] - TPC[1])**2)
 
 # def angle_to_pink(sensor_data, camera_data):
 #     pink_x, pink_y = detect_pink(camera_data)

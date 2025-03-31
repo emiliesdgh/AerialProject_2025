@@ -24,6 +24,39 @@ def triangulate_point(u1, v1, u2, v2, C1, C2, f_pixels):
 
     return P
 
+
+def compute_rotation_matrix(yaw, pitch, roll):
+    # Convert angles from degrees to radians
+    yaw = np.radians(yaw)
+    pitch = np.radians(pitch)
+    roll = np.radians(roll)
+
+    # Rotation matrix for yaw (around z-axis)
+    R_yaw = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
+    ])
+
+    # Rotation matrix for pitch (around y-axis)
+    R_pitch = np.array([
+        [np.cos(pitch), 0, np.sin(pitch)],
+        [0, 1, 0],
+        [-np.sin(pitch), 0, np.cos(pitch)]
+    ])
+
+    # Rotation matrix for roll (around x-axis)
+    R_roll = np.array([
+        [1, 0, 0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll), np.cos(roll)]
+    ])
+
+    # Combined rotation matrix
+    R = np.dot(R_yaw, np.dot(R_pitch, R_roll))
+
+    return R
+
 # Example usage
 C1 = np.array([0.03, 0, 0.01])  # Camera 1 position
 C2 = np.array([0.1, 0, 0.01])   # Camera 2 position (example)
@@ -34,3 +67,15 @@ u2, v2 = 140, 115  # Pixel coordinates in second image
 
 P = triangulate_point(u1, v1, u2, v2, C1, C2, f_pixels)
 print("3D Position:", P)
+
+# Example usage
+yaw = 30  # degrees
+pitch = 45  # degrees
+roll = 60  # degrees
+
+rotation_matrix = compute_rotation_matrix(yaw, pitch, roll)
+print("rotation matrix" , rotation_matrix)
+
+P = rotation_matrix @ P
+print("Rotated 3D Position:", P)
+
