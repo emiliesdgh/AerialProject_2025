@@ -77,65 +77,43 @@ def get_command(sensor_data, camera_data, dt):
     elif deltaTime < 7 and deltaTime > 5:
         if starting_position :
             R_initial = C2W([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
-            print("R_initial : ", R_initial.shape)
+
             initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
             print("initial_pos : ", initial_pos)
             
             pink1 = detect_pink(camera)
-            # print("pink1 cam : ", pink1)
-           
-            ## convert pink1 to world frame, the 2 options are the same
-            # pink1 = C2W(R_initial) @ pink1
-            # pink1 = pink1 @ C2W(R_initial).T 
             print("pink1 world : ", pink1)
-            # pink1 = rot.quaternion2rotmat([sensor_data['q_x'], sensor_data['q_y'], sensor_data['q_z'], sensor_data['q_w']]).T @ pink1
-            # print("pink1 world : ", pink1)
             
             starting_position = False
 
         control_command = [0.75, 3.5, 1.0, sensor_data['yaw']+0.05]
-        # print("sensor data before moving")
-        # print(sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw'])
+
 
     elif deltaTime < 8.5 and deltaTime > 7:
 
-        # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
        
         if second_position :
             R_second = C2W([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
+            
             second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
             print("second_pos : ", second_pos)
 
             pink2 = detect_pink(camera)
-            # print("pink2 : ", pink2)
-            ## convert pink1 to world frame
-            # pink2 = C2W(R_second) @ pink2
-            # pink2 = pink2 @ C2W(R_second).T
-            # print("pink2 world : ", pink2)
-
-            # pink2 = pink2 @ C2W(R_second)
             print("pink2 world : ", pink2)
 
             way_point1 = triangulate(R_initial, R_second, initial_pos, second_pos, pink1, pink2)
+            if way_point1[2] < 0:
+                way_point1[2] = -way_point1[2]
             print("way_point1 : ", way_point1)
 
             second_position = False
 
-        # way_point1W = C2W(R_initial, way_point1)
-        # dy = way_point1[1] - y_second 
-        # way_point1[1] = y_second - dy
-        # way_point1 = np.array([x_second + way_point1[0], y_second - way_point1[1], 1.0])
-
-
-        # print("way_point1 : ", way_point1)
-        # print("way_point1W : ", way_point1W)
     if deltaTime > 8.5:
         # print("over time 8")
 
         control_command = [way_point1[0], way_point1[1], way_point1[2], sensor_data['yaw']]
  
-    
     return control_command # Ordered as array with: [pos_x_cmd, pos_y_cmd, pos_z_cmd, yaw_cmd] in meters and radianss
 
 
@@ -146,91 +124,53 @@ def triangulate(R1, R2, initial_pos, second_pos, pink1, pink2) :
 
     v1 = np.array([pink1[0], pink1[1], vz])
     v2 = np.array([pink2[0], pink2[1], vz])
-    # v1 = np.reshape(v1, (3,1))
-    # v2 = np.reshape(v2, (3,1))
-    v1 = v1/np.linalg.norm(v1)
-    v2 = v2/np.linalg.norm(v2)
+    print("v1 : ", v1)
+    print("v2 : ", v2)
+
+    # v1 = v1/np.linalg.norm(v1)
+    # v2 = v2/np.linalg.norm(v2)
 
     C1 = np.array([initial_pos[0]+0.03, initial_pos[1], initial_pos[2]+0.01])
     C2 = np.array([second_pos[0]+0.03, second_pos[1], second_pos[2]+0.01])
 
-    # d1 = v1/np.linalg.norm(v1)
-    # d2 = v2/np.linalg.norm(v2)
-
-    # A = np.vstack((d1, d2)).T
-    # b = C2 - C1
-
-    # lambdas = np.linalg.lstsq(A, b, rcond=None)[0]
-    # lambda1, lambda2 = lambdas
-
-    # p1 = C1 + lambda1 * d1
-    # p2 = C2 + lambda2 * d2
-
-    # print("R1 : ", R1.shape)
-    # print("v1 : ", v1.shape)
-
     r = R1 @ v1
     s = R2 @ v2
+    # s = s/np.linalg.norm(s)
+    # r = r/np.linalg.norm(r)
     print("r : ", r)
     print("s : ", s)
 
-    # P = np.array([initial_pos[0]+0.03, initial_pos[1]+0, initial_pos[2]+0.01])
-    # Q = np.array([second_pos[0]+0.03, second_pos[1]+0, second_pos[2]+0.01])
-
-    # P = np.array([initial_pos[0], initial_pos[1], initial_pos[2]])
-    # Q = np.array([second_pos[0], second_pos[1], second_pos[2]])
-
     A = np.array([[np.dot(r,r) , -np.dot(s,r)],
                   [np.dot(r,s) , -np.dot(s,s)]])
-    # print("A : ", A.shape)
 
-    # b = np.array([[np.dot((pink1 - pink2), r)], 
-    #               [np.dot((pink1 - pink2), s)]])
-    b1 = np.dot((pink2 - pink1), r)
-    b2 = np.dot((pink2 - pink1), s)
+    # b1 = np.dot((pink2 - pink1), r)
+    # b2 = np.dot((pink2 - pink1), s)
 
-    # print("pink2-pink1 : ", pink2-pink1, " r : ", r)
+    b2 = np.dot((C2 - C1), s)
+    b1 = np.dot((C2 - C1), r)
 
-    # b1 = np.dot((Q - P), r)
-    # b2 = np.dot((Q - P), s)
-    # print("b1 : ", b1, " b2 : ", b2)
-    b = np.array([b1, b2])
-    # b = np.array([[np.dot((C1 - C2), r)], 
-    #               [np.dot((C1 - C2), s)]])
+    b = np.array([[b1], [b2]])
     
     print("A : ", A)
     print("b : ", b)
-    # print("b : ", b.shape)
 
-    # A = np.column_stack((r, -s))
-    # b = C2 - C1
-    
-    # alpha, beta = np.linalg.inv(A) @ b
-    alpha, beta = A @ b
-    # gamma = np.linalg.inv(A) #@ b
-    # print("gamma : ", gamma)
-    alpha = alpha + 1.5
+    alpha, beta = np.linalg.inv(A) @ b
+    print("alpha : ", alpha)
+    print("beta : ", beta)
+    alpha = alpha + 0.5
     beta = beta + 0.5
-    # gamma = np.linalg.lstsq(A, b, rcond=None)[0]
-    # print("gamma : ", gamma)
-    print("alpha : ", alpha, " beta : ", beta)
-    print("C1 : ", C1)
-    print("C2 : ", C2)
+    # alpha, beta = np.linalg.lstsq(A, b, rcond=None)[0]
 
     F = C1 + alpha * r
-    # F = R1 @ F
     G = C2 + beta * s
-    print("F1 : ", F)
-    print("G1 : ", G)
-    alpha = alpha - 1.5
-    beta = beta + 0.5
-
-    F = C1 + alpha * r
-    # F = R1 @ F
-    G = C2 + beta * s
-    # G = R2 @ G
-    print("F2 : ", F)
-    print("G2 : ", G)
+    print("F : ", F)
+    print("G : ", G)
+    F = R1 @ F
+    G = R2 @ G
+    # print("C1 : ", C1)
+    # print("C2 : ", C2)
+    print("F : ", F)
+    print("G : ", G)
 
     H = (F + G)/2 
     # H = (p1 + p2)/2
@@ -262,7 +202,7 @@ def C2W(rotationMat) :
     # Calculate the rotation matrix
     R = R_yaw @ R_pitch @ R_roll
     # print("R : ", R)
-    return R
+    return R.T
 
 
 # def get_waypoints(sensor_data, camera_data, dt) :
