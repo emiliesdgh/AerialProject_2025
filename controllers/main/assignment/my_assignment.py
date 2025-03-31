@@ -33,7 +33,7 @@ from main import CrazyflieInDroneDome as Drone
 
 # A link to further information on how to access the sensor data on the Crazyflie hardware for the hardware practical can be found here: https://www.bitcraze.io/documentation/repository/crazyflie-firmware/master/api/logs/#stateestimate
 starting_position = True
-second_position = False
+second_position = True
 pink_direction = None
 position = "start"
 initial = np.zeros(4)
@@ -50,6 +50,7 @@ start_time = time.time()
 def get_command(sensor_data, camera_data, dt):
     global starting_position, second_position, pink_direction, position, start_time, initial, second, way_point1, R_initial,TPC1, TPC2,way_point1W
 
+    camera = camera_data.copy()
     # NOTE: Displaying the camera image with cv2.imshow() will throw an error because GUI operations should be performed in the main thread.
     # If you want to display the camera image you can call it main.py.
 
@@ -59,7 +60,7 @@ def get_command(sensor_data, camera_data, dt):
         return control_command
 
     # ---- YOUR CODE HERE ----
-    camera_data = np.array(camera_data)
+    # camera_data = np.array(camera_data)
     # print(camera_data.shape)
     # print(camera_data[0])
 
@@ -123,19 +124,35 @@ def get_command(sensor_data, camera_data, dt):
     if deltaTime < 5:
 
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
-        x_initial = sensor_data['x_global']
-        y_initial = sensor_data['y_global']
-        z_initial = sensor_data['z_global']
-        yaw_initial = sensor_data['yaw']
-        R_initial = [sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]
-        initial = np.array([x_initial, y_initial, z_initial])
+        # x_initial = sensor_data['x_global']
+        # y_initial = sensor_data['y_global']
+        # z_initial = sensor_data['z_global']
+        # yaw_initial = sensor_data['yaw']
+        # R_initial = [sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]
+        # initial = np.array([x_initial, y_initial, z_initial])
 
-        pink_center_initial = detect_pink(camera_data)
-        print("pink_center_initial : ", pink_center_initial)
-        TPC1 = C2W(R_initial, pink_center_initial)
-        print("TPC1 : ", TPC1)
+        # pink_center_initial = detect_pink(camera_data)
+        # print("pink_center_initial : ", pink_center_initial)
+        # TPC1 = C2W(R_initial, pink_center_initial)
+        # TPC1 = pink_center_initial
+        # print("TPC1 : ", TPC1)
+
+        # if starting_position :
+        #     pink_center_initial = detect_pink(camera_data)
+        #     starting_position = False
 
     elif deltaTime < 7 and deltaTime > 5:
+        if starting_position :
+            pink_center_initial = detect_pink(camera)
+            TPC1 = pink_center_initial
+            print("TPC1 : ", TPC1)
+            x_initial = sensor_data['x_global']
+            y_initial = sensor_data['y_global']
+            z_initial = sensor_data['z_global']
+            yaw_initial = sensor_data['yaw']
+            R_initial = [sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]
+            initial = np.array([x_initial, y_initial, z_initial])
+            starting_position = False
 
         control_command = [0.75, 3.5, 1.0, sensor_data['yaw']+0.05]
         # print("sensor data before moving")
@@ -145,21 +162,35 @@ def get_command(sensor_data, camera_data, dt):
 
         # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
-        x_second = sensor_data['x_global']
-        y_second = sensor_data['y_global']
-        z_second = sensor_data['z_global']
-        yaw_second = sensor_data['yaw']
-        second = np.array([x_second, y_second, z_second])
+        # x_second = sensor_data['x_global']
+        # y_second = sensor_data['y_global']
+        # z_second = sensor_data['z_global']
+        # yaw_second = sensor_data['yaw']
+        # second = np.array([x_second, y_second, z_second])
 
-        pink_center_second = detect_pink(camera_data)
-        print("pink_center_second : ", pink_center_second)
-        TPC2 = C2W(R_initial, pink_center_second)
-        print("TPC2 : ", TPC2)
+        # pink_center_second = detect_pink(camera_data)
+        # print("pink_center_second : ", pink_center_second)
+        # # TPC2 = C2W(R_initial, pink_center_second)
+        # TPC2 = pink_center_second
+        # print("TPC2 : ", TPC2)
 
-        print("triangulate")
+        
 
         ## not the right coordinates... hmmm 
-        way_point1 = triangulate(sensor_data, camera_data, dt, initial, second, R_initial, TPC1, TPC2)
+        if second_position :
+            x_second = sensor_data['x_global']
+            y_second = sensor_data['y_global']
+            z_second = sensor_data['z_global']
+            yaw_second = sensor_data['yaw']
+            second = np.array([x_second, y_second, z_second])
+
+            pink_center_second = detect_pink(camera)
+            print("pink_center_second : ", pink_center_second)
+            # TPC2 = C2W(R_initial, pink_center_second)
+            TPC2 = pink_center_second
+            print("TPC2 : ", TPC2)
+            way_point1 = triangulate(R_initial, initial, second, TPC1, TPC2)
+            second_position = False
 
         # way_point1W = C2W(R_initial, way_point1)
         # dy = way_point1[1] - y_second 
@@ -172,8 +203,9 @@ def get_command(sensor_data, camera_data, dt):
         # print("way_point1W : ", way_point1W)
     if deltaTime > 8.5:
         print("over time 8")
+        # C2W(initial, second, TPC1, TPC2)
 
-        control_command = [way_point1[0], way_point1[1], 1.0, sensor_data['yaw']]
+        control_command = [way_point1[0], way_point1[1], way_point1[2], sensor_data['yaw']]
     # if position == "start" :
     #     control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
     #     print("in start")
@@ -185,89 +217,17 @@ def get_command(sensor_data, camera_data, dt):
     #     position = "third"
 
     # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
-
+    
     # position = "second"
-
+    
     return control_command # Ordered as array with: [pos_x_cmd, pos_y_cmd, pos_z_cmd, yaw_cmd] in meters and radianss
 
-def triangulate(sensor_data, camera_data, dt, P, Q, R_init, TPC1, TPC2) :
-    # f_pixel = 300/(2*np.tan(1.5/2))
-    vz = 300/(2*np.tan(1.5/2))
-    # alpha = 1
-    # beta = 1
-    # P = initial
-    # Q = second
-    # print(f_pixel)
-    # print(P.shape)
-    # print(Q.shape)
-    # euler_angles = [sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]
-    R = np.eye(3)
-    euler_angles = [R_init[0], R_init[1], R_init[2]]
+def triangulate(R_init, initial, second, TPC1, TPC2) :
+    W = 300
+    vz = W/(2*np.tan(1.5/2))
+    print("triangulate")
 
-    R_roll = np.array([ [1, 0, 0], 
-                        [0, np.cos(euler_angles[0]), -np.sin(euler_angles[0])],
-                        [0, np.sin(euler_angles[0]), np.cos(euler_angles[0])]])
-    
-    R_pitch = np.array([[np.cos(euler_angles[1]), 0, np.sin(euler_angles[1])],
-                        [0, 1, 0],
-                        [-np.sin(euler_angles[1]), 0, np.cos(euler_angles[1])]])
-    
-    R_yaw = np.array([ [np.cos(euler_angles[2]), -np.sin(euler_angles[2]), 0],
-                        [np.sin(euler_angles[2]), np.cos(euler_angles[2]), 0],
-                        [0, 0, 1]])
-    
-    R = (R_yaw @ R_pitch @ R_roll).T
-    # R = (R_yaw @ R_pitch @ R_roll)
-
-    ## using sensor data
-    # v = R @ np.array([P[0], P[1], 0])
-    # v_prim = R @ np.array([Q[0], Q[1], 0])
-
-    ## using pink center from camera data
-    v = R @ np.array([TPC1[0], TPC1[1], vz])
-    v_prim = R @ np.array([TPC2[0], TPC2[1], vz])
-
-    r = R @ v
-    s = R @ v_prim
-
-    A = np.array([[np.dot(r,r) , -np.dot(s,r)],
-                  [np.dot(r,s) , -np.dot(s,s)]])
-    # print(A.shape)
-
-    ## using sensor data
-    # b = np.array([[np.dot((P - Q), r)], 
-    #               [np.dot((P - Q), s)]])
-
-    ## using pink center from camera data
-    b = np.array([[np.dot((TPC1 - TPC2), r)], 
-                  [np.dot((TPC1 - TPC2), s)]])
-    
-    alpha, beta = np.linalg.inv(A) @ b
-
-    # ## Tuning alpha and beta
-    # print("alpha : ", alpha, "beta : ", beta)
-
-    # alpha = alpha + 0.1
-    # beta = beta + 0.1
-    # print("alpha : ", alpha, "beta : ", beta)
-
-    ## using sensor data
-    # F = P + alpha * r
-    # G = Q + beta * s
-
-    ## using pink center from camera data
-    F = TPC1 + alpha * r
-    G = TPC2 + beta * s
-
-    H = (F + G)/2 
-
-    # H = np.array([H[0], -H[1], 1.0])
-
-    # print("H : ", H)
-    # print("alpha : ", alpha, "beta : ", beta)
-    return H
-
-def C2W(R_init, point) :
+    # R = np.eye(3)
     R = np.eye(3)
 
     euler_angles = [R_init[0], R_init[1], R_init[2]]
@@ -286,7 +246,82 @@ def C2W(R_init, point) :
     
     R = (R_yaw @ R_pitch @ R_roll)
 
-    point = R @ point
+    # v1 = np.array([TPC1[0] - (W/2), TPC1[1] - (W/2), vz])
+    # v2 = np.array([TPC2[0] - (W/2), TPC2[1] - (W/2), vz])
+
+    v1 = np.array([TPC1[0], TPC1[1], vz])
+    v2 = np.array([TPC2[0], TPC2[1], vz])
+
+    # r = R @ v1
+    # s = R @ v2
+    r = v1
+    s = v2
+
+    C1 = np.array([initial[0]+0.03, initial[1]+0, initial[2]+0.01])
+    C2 = np.array([second[0]+0.03, second[1]+0, second[2]+0.01])
+
+    # v = R @ np.array([TPC1[0], TPC1[1], vz])
+    # v_prim = R @ np.array([TPC2[0], TPC2[1], vz])
+    # r = R @ v
+    # s = R @ v_prim
+
+    A = np.array([[np.dot(r,r) , -np.dot(s,r)],
+                  [np.dot(r,s) , -np.dot(s,s)]])
+
+    # b = np.array([[np.dot((TPC1 - TPC2), r)], 
+    #               [np.dot((TPC1 - TPC2), s)]])
+    
+    b = np.array([[np.dot((C1 - C2), r)], 
+                  [np.dot((C1 - C2), s)]])
+
+    # A = np.column_stack((r, -s))
+    # b = C2 - C1
+    
+    alpha, beta = np.linalg.inv(A) @ b
+    # alpha, beta = np.linalg.lstsq(A, b, rcond=None)[0]
+
+    # F = TPC1 + alpha * r
+    # G = TPC2 + beta * s
+    F = C1 + alpha * r
+    G = C2 + beta * s
+
+    H = (F + G)/2 
+    print("H : ", H)
+
+    return H
+
+def C2W(initial, second, TPC1, TPC2) :
+    W = 300
+    f_pixel = W/(2*np.tan(1.5/2))
+
+    cx, cy = W/2, W/2
+
+    K = np.array([[f_pixel, 0, cx],
+                  [0, f_pixel, cy],
+                  [0, 0, 1]], dtype=np.float32)
+    world = np.array([[initial],
+                      [second]], dtype=np.float32)
+    point = np.array([[TPC1], 
+                      [TPC2]], dtype=np.float32)
+
+    success, R, T = cv2.solvePnP(world, point, K, None)
+    if success :
+        print("success")
+        print("R : ", R)
+        print("T : ", T)
+    # # R = np.eye(3)
+    # # euler_angles = [R_init[0], R_init[1], R_init[2]]
+    # # R_roll = np.array([ [1, 0, 0], 
+    # #                     [0, np.cos(euler_angles[0]), -np.sin(euler_angles[0])],
+    # #                     [0, np.sin(euler_angles[0]), np.cos(euler_angles[0])]])
+    # # R_pitch = np.array([[np.cos(euler_angles[1]), 0, np.sin(euler_angles[1])],
+    # #                     [0, 1, 0],
+    # #                     [-np.sin(euler_angles[1]), 0, np.cos(euler_angles[1])]])
+    # # R_yaw = np.array([ [np.cos(euler_angles[2]), -np.sin(euler_angles[2]), 0],
+    # #                     [np.sin(euler_angles[2]), np.cos(euler_angles[2]), 0],
+    # #                     [0, 0, 1]])
+    # # R = (R_yaw @ R_pitch @ R_roll)
+    # # point = R @ point
 
     return point
 
@@ -307,6 +342,13 @@ def detect_pink(camera_data):
     lower_pink = np.array([140, 100, 100])
     upper_pink = np.array([160, 255, 255])
     mask = cv2.inRange(imgHSV, lower_pink, upper_pink)
+
+    # cv2.rectangle(imgHSV, (150, 150), (160, 160), (0, 0, 255), 2)
+    # cv2.imshow("Image with pink square", imgHSV)
+    # cv2.waitKey(1)
+
+    originX = 150
+    originY = 150
     
     # Find contours in the mask
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -315,7 +357,13 @@ def detect_pink(camera_data):
             x, y, w, h = cv2.boundingRect(contour)
             # print(x + w/2, y + h/2)
             center = np.array([x + w/2, y + h/2, 1.0])
-            return center  # Return the center of the pink square
+            # cv2.circle(camera_data, (int(center[0]), int(center[1])), 5, (0, 0, 255), -1)
+            print("x : ", x, "y : ", y)
+            print("w : ", w, "h : ", h)
+            print("center : ", center)
+            print("new center : ", center[0] - originX, center[1] - originY)
+            new_center = np.array([center[0] - originX, center[1] - originY])
+            return new_center  # Return the center of the pink square
 
     return None
 
