@@ -119,7 +119,7 @@ def get_command(sensor_data, camera_data, dt):
     # print("in get_command")
     # print(dt)
     deltaTime = time.time() - start_time 
-    print(deltaTime)
+    # print(deltaTime)
     if deltaTime < 5:
 
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
@@ -132,15 +132,16 @@ def get_command(sensor_data, camera_data, dt):
 
         pink_center_initial = detect_pink(camera_data)
         print("pink_center_initial : ", pink_center_initial)
-        TPC1 = pink_center_initial
+        TPC1 = C2W(R_initial, pink_center_initial)
+        print("TPC1 : ", TPC1)
 
     elif deltaTime < 7 and deltaTime > 5:
 
-        control_command = [sensor_data['x_global'], 3.5, 1.0, sensor_data['yaw']+0.01]
+        control_command = [0.75, 3.5, 1.0, sensor_data['yaw']+0.05]
         # print("sensor data before moving")
         # print(sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw'])
 
-    elif deltaTime < 8 and deltaTime > 7:
+    elif deltaTime < 8.5 and deltaTime > 7:
 
         # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
@@ -152,14 +153,15 @@ def get_command(sensor_data, camera_data, dt):
 
         pink_center_second = detect_pink(camera_data)
         print("pink_center_second : ", pink_center_second)
-        TPC2 = pink_center_second
+        TPC2 = C2W(R_initial, pink_center_second)
+        print("TPC2 : ", TPC2)
 
         print("triangulate")
 
         ## not the right coordinates... hmmm 
         way_point1 = triangulate(sensor_data, camera_data, dt, initial, second, R_initial, TPC1, TPC2)
 
-        way_point1W = C2W(R_initial, way_point1)
+        # way_point1W = C2W(R_initial, way_point1)
         # dy = way_point1[1] - y_second 
         # way_point1[1] = y_second - dy
         # way_point1 = np.array([x_second + way_point1[0], y_second - way_point1[1], 1.0])
@@ -167,11 +169,11 @@ def get_command(sensor_data, camera_data, dt):
     
 
         print("way_point1 : ", way_point1)
-        print("way_point1W : ", way_point1W)
-    if deltaTime > 8:
+        # print("way_point1W : ", way_point1W)
+    if deltaTime > 8.5:
         print("over time 8")
 
-        control_command = [way_point1W[0], way_point1W[1], 1.0, sensor_data['yaw']]
+        control_command = [way_point1[0], way_point1[1], 1.0, sensor_data['yaw']]
     # if position == "start" :
     #     control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
     #     print("in start")
@@ -188,8 +190,9 @@ def get_command(sensor_data, camera_data, dt):
 
     return control_command # Ordered as array with: [pos_x_cmd, pos_y_cmd, pos_z_cmd, yaw_cmd] in meters and radianss
 
-def triangulate(sensor_data, camera_data, dt, P, Q, R, TPC1, TPC2) :
-    f_pixel = 300/(2*np.tan(1.5/2))
+def triangulate(sensor_data, camera_data, dt, P, Q, R_init, TPC1, TPC2) :
+    # f_pixel = 300/(2*np.tan(1.5/2))
+    vz = 300/(2*np.tan(1.5/2))
     # alpha = 1
     # beta = 1
     # P = initial
@@ -198,7 +201,8 @@ def triangulate(sensor_data, camera_data, dt, P, Q, R, TPC1, TPC2) :
     # print(P.shape)
     # print(Q.shape)
     # euler_angles = [sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]
-    euler_angles = [R[0], R[1], R[2]]
+    R = np.eye(3)
+    euler_angles = [R_init[0], R_init[1], R_init[2]]
 
     R_roll = np.array([ [1, 0, 0], 
                         [0, np.cos(euler_angles[0]), -np.sin(euler_angles[0])],
@@ -220,8 +224,8 @@ def triangulate(sensor_data, camera_data, dt, P, Q, R, TPC1, TPC2) :
     # v_prim = R @ np.array([Q[0], Q[1], 0])
 
     ## using pink center from camera data
-    v = R @ np.array([TPC1[0], TPC1[1], 0])
-    v_prim = R @ np.array([TPC2[0], TPC2[1], 0])
+    v = R @ np.array([TPC1[0], TPC1[1], vz])
+    v_prim = R @ np.array([TPC2[0], TPC2[1], vz])
 
     r = R @ v
     s = R @ v_prim
@@ -263,8 +267,10 @@ def triangulate(sensor_data, camera_data, dt, P, Q, R, TPC1, TPC2) :
     # print("alpha : ", alpha, "beta : ", beta)
     return H
 
-def C2W(R, point) :
-    euler_angles = [R[0], R[1], R[2]]
+def C2W(R_init, point) :
+    R = np.eye(3)
+
+    euler_angles = [R_init[0], R_init[1], R_init[2]]
 
     R_roll = np.array([ [1, 0, 0], 
                         [0, np.cos(euler_angles[0]), -np.sin(euler_angles[0])],
@@ -280,7 +286,7 @@ def C2W(R, point) :
     
     R = (R_yaw @ R_pitch @ R_roll)
 
-    point = point @ R
+    point = R @ point
 
     return point
 
