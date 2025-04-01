@@ -41,10 +41,19 @@ second_pos = np.zeros(4)
 R_initial = np.eye(3)
 R_second = np.eye(3)
 
+alpha = 0
+dz = 0
+waypoint1 = np.zeros(3)
+waypoint2 = np.zeros(3)
+waypoint3 = np.zeros(3)
+waypoint4 = np.zeros(3)
+waypoint5 = np.zeros(3)
+
 
 def get_command(sensor_data, camera_data, dt):
     global start_time, F_PIXEL
     global start_position, second_position, corners1, corners2, center1, center2, initial_pos, second_pos, R_initial, R_second
+    global alpha, dz, waypoint1, waypoint2, waypoint3, waypoint4, waypoint5
 
     # NOTE: Displaying the camera image with cv2.imshow() will throw an error because GUI operations should be performed in the main thread.
     # If you want to display the camera image you can call it main.py.
@@ -85,7 +94,7 @@ def get_command(sensor_data, camera_data, dt):
 
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
 
-    if deltaTime > 11 :
+    if deltaTime > 11  and deltaTime < 13.5:
          
         if second_position :
             center2, corners2 = detect_pink_rectangle(camera, False)
@@ -99,10 +108,19 @@ def get_command(sensor_data, camera_data, dt):
             # print("Corners2:", corners2)
             print("Center2:", center2)
 
-            C = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
-            print("C : ", C)
+            waypoint1, dz = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
+            print("waypoint1 : ", waypoint1, "dz : ", dz)
+            alpha1 = angle_to_pink(corners1, center1)
+            alpha2 = angle_to_pink(corners2, center2)
+            print("alpha1 : ", alpha1, "alpha2 : ", alpha2)
+            dalpha = (alpha1 + alpha2)/2
+            alpha = np.radians(dalpha)
 
-        control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
+        # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
+        control_command = [waypoint1[0], waypoint1[1], 1.0+dz, sensor_data['yaw']-alpha]
+    if deltaTime > 13.5:
+
+        control_command = [sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
         
     # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
 
@@ -111,11 +129,19 @@ def get_command(sensor_data, camera_data, dt):
 # triangulate the position of the pink rectangle in the world frame
 def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
     
-    # c1, c2 : corners 1 and 2 in camera frame
-
     v1 = np.array([c1[0], c1[1], F_PIXEL])
-    
     v2 = np.array([c2[0], c2[1], F_PIXEL])
+
+    # print("y1 : ", c1[1])
+    # print("y2 : ", c2[1])
+
+    z = (c1[1] + c2[1])/2
+    # print("z : ", z)
+
+    theta = z * FOV / WIDTH
+
+    dz = - np.tan(theta)
+    # print("dz : ", dz)
 
     v1 = v1 / np.linalg.norm(v1)
     v2 = v2 / np.linalg.norm(v2)
@@ -125,6 +151,9 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
 
     r = R1 @ v1
     s = R2 @ v2
+
+    print("r : ", r)
+    print("s : ", s)
 
     A = np.array([[np.dot(r,r) , -np.dot(s,r)],
                   [np.dot(r,s) , -np.dot(s,s)]])
@@ -144,7 +173,7 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
 
     H = (F + G)/2 
 
-    return H
+    return H, dz
 
 # rotation from camera frame to body frame
 def C2B(rotationMat) :
@@ -189,7 +218,37 @@ def B2W(roll, pitch, yaw) :
 
     return R
 
+def detect_rectangle_orientation(corners1, corners2):
+    H, _ = cv2.findHomography(corners1, corners2)
+    print("Homography Matrix:\n", H)
+
+
+    
+    # get the center of the rectangle
+    center1 = np.mean(corners1, axis=0)
+    center2 = np.mean(corners2, axis=0)
+
+    # sort the corners
+    corners1 = corners1[np.argsort(np.arctan2(corners1[:, 1] - center1[1], corners1[:, 0] - center1[0]))]
+    corners2 = corners2[np.argsort(np.arctan2(corners2[:, 1] - center2[1], corners2[:, 0] - center2[0]))]
+
+    return center1, center2, corners1, corners2
+
+def angle_to_pink(corners, center):
+#     pink_x, pink_y = detect_pink(camera_data)
+#     return np.arctan((pink_y - sensor_data['y_global'])/(pink_x - sensor_data['x_global']))
 # detect the pink rectangle in the camera frame
+    # center, corners = detect_pink_rectangle(camera_data, True)
+    if corners is not None:
+        # get the center of the rectangle
+        # center = np.mean(corners, axis=0)
+        # sort the corners
+        corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
+        # get the angle of the rectangle
+        angle = np.arctan2(center[1], center[0])
+        return angle
+    return None
+
 def detect_pink_rectangle(camera, inMain):
 
     HSV_img = cv2.cvtColor(camera, cv2.COLOR_BGR2HSV)
