@@ -14,6 +14,8 @@ import lib.mapping_and_planning_examples as mapping_and_planning_examples
 import time, random
 import threading
 
+import cv2
+
 exp_num = 4                    # 0: Coordinate Transformation, 1: PID Tuning, 2: Kalman Filter, 3: Motion Planning, 4: Project
 control_style = 'path_planner'      # 'keyboard' or 'path_planner'
 rand_env = False                # Randomise the environment
@@ -660,7 +662,7 @@ def path_planner_thread(drone):
                 current_setpoint = new_setpoint
 
         time.sleep(0.01)
-    
+
 
 if __name__ == '__main__':
 
@@ -668,6 +670,7 @@ if __name__ == '__main__':
     drone = CrazyflieInDroneDome()
     assert control_style in ['keyboard','path_planner'], "Variable control_style must either be 'keyboard' or 'path_planner'"
     assert exp_num in [0,1,2,3,4], "Exp_num must be a value between 0 and 4"
+    
 
     # Start the path planner thread
     if control_style == 'path_planner' and exp_num == 4:
@@ -721,6 +724,8 @@ if __name__ == '__main__':
 
                         # Read the camera feed
                         camera_data = drone.read_camera()
+
+                        # assignment.detect_pink_rectangle(camera_data)
                         
                         # Update the sensor data in the thread
                         with sensor_lock:
@@ -745,6 +750,7 @@ if __name__ == '__main__':
 
             # Update the drone status in simulation
             drone.step(motorPower, sensor_data)
+            assignment.detect_pink_rectangle(camera_data, True)
     
     except KeyboardInterrupt:
         running = False
