@@ -64,22 +64,28 @@ def get_command(sensor_data, camera_data, dt):
         return control_command
 
     # ---- YOUR CODE HERE ----
+    ## start time of the simulation
     deltaTime = time.time() - start_time 
     # print("Delta Time:", deltaTime)
 
+    ## get the camera data
     camera = camera_data.copy()
 
+    ## let the drone take off 
     if deltaTime < 7 :
 
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
 
+    ## once drone stable enough, get starting position information ##
     elif deltaTime < 9.5 and deltaTime > 7 :
 
         if start_position : 
-            
+            ## detect the pink rectangle for image 1 ##
             center1, corners1 = detect_pink_rectangle(camera, False)
 
+            ## get the initial position and orientation of the drone ##
             initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
+            ## get the rotation matrix from camera frame to body frame to world frame R1 ##
             R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
             R_initial = B2W(R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw)
 
@@ -88,28 +94,33 @@ def get_command(sensor_data, camera_data, dt):
             # print("Corners1:", corners1)
             print("Center1:", center1)
 
+        ## move drone to the next position for 2nd image ##
         control_command = [0.75, 3.5, 1.0, sensor_data['yaw']+0.1]
     
     elif deltaTime < 11 and deltaTime > 9.5:
-
+        ## let drone move to 2nd position ##
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
 
+    ## once drone is stable enough, get the 2nd position information ##
     if deltaTime > 11  and deltaTime < 13.5:
          
         if second_position :
+            ## detect the pink rectangle for image 2 ##
             center2, corners2 = detect_pink_rectangle(camera, False)
 
+            ## get the second position and orientation of the drone ##
             second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
+            ## get the rotation matrix from camera frame to body frame to world frame R2 ##
             R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
-            
             R_second = B2W(R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw)
 
             second_position = False
             # print("Corners2:", corners2)
             print("Center2:", center2)
-
+            
+            ## triangulate the position of the pink rectangle in the world frame => get 1st waypoint ##
             waypoint1, dz = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
-            print("waypoint1 : ", waypoint1, "dz : ", dz)
+            print("waypoint1 : ", waypoint1, "z : ", dz + 1.0)
             alpha1 = angle_to_pink(corners1, center1)
             alpha2 = angle_to_pink(corners2, center2)
             print("alpha1 : ", alpha1, "alpha2 : ", alpha2)
@@ -117,6 +128,7 @@ def get_command(sensor_data, camera_data, dt):
             alpha = np.radians(dalpha)
 
         # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
+        ## move to the 1st waypoint ##
         control_command = [waypoint1[0], waypoint1[1], 1.0+dz, sensor_data['yaw']-alpha]
     if deltaTime > 13.5:
 
@@ -128,12 +140,10 @@ def get_command(sensor_data, camera_data, dt):
 
 # triangulate the position of the pink rectangle in the world frame
 def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
+    '''function to triangulate the position of the pink rectangle in the world frame'''
     
     v1 = np.array([c1[0], c1[1], F_PIXEL])
     v2 = np.array([c2[0], c2[1], F_PIXEL])
-
-    # print("y1 : ", c1[1])
-    # print("y2 : ", c2[1])
 
     z = (c1[1] + c2[1])/2
     # print("z : ", z)
@@ -165,8 +175,8 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
 
     alpha, beta = np.linalg.inv(A) @ b
 
-    alpha = alpha + 0.5
-    beta = beta + 0.6
+    # alpha = alpha + 0.5
+    # beta = beta + 0.6
 
     F = P + alpha * r
     G = Q + beta * s
@@ -177,6 +187,8 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
 
 # rotation from camera frame to body frame
 def C2B(rotationMat) :
+    '''function to convert the rotation matrix from camera frame to body frame'''
+
     roll = rotationMat[0]
     pitch = rotationMat[1]
     yaw = rotationMat[2]
@@ -199,6 +211,8 @@ def C2B(rotationMat) :
     
 # rotation from body frame to world frame
 def B2W(roll, pitch, yaw) :
+    '''function to convert the rotation matrix from body frame to world frame'''
+
     R = np.eye(3)
 
     R_yaw = np.array([[np.cos(yaw), -np.sin(yaw), 0],
@@ -250,6 +264,7 @@ def angle_to_pink(corners, center):
     return None
 
 def detect_pink_rectangle(camera, inMain):
+    '''function to detect the pink rectangle in the camera frame'''
 
     HSV_img = cv2.cvtColor(camera, cv2.COLOR_BGR2HSV)
     lower_pink = np.array([140, 50, 50])
