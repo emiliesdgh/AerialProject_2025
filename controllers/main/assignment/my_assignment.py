@@ -119,20 +119,27 @@ def get_command(sensor_data, camera_data, dt):
             print("Center2:", center2)
             
             ## triangulate the position of the pink rectangle in the world frame => get 1st waypoint ##
-            waypoint1, dz = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
-            print("waypoint1 : ", waypoint1, "z : ", dz + 1.0)
-            alpha1 = angle_to_pink(corners1, center1)
-            alpha2 = angle_to_pink(corners2, center2)
-            print("alpha1 : ", alpha1, "alpha2 : ", alpha2)
-            dalpha = (alpha1 + alpha2)/2
-            alpha = np.radians(dalpha)
+            waypoint1, dz, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
+            print("yaw angle : ", sensor_data['yaw'])
+            print("alpha from triangulation : ", alpha)
+            dz = dz + sensor_data['z_global']
+            # print("waypoint1 : ", waypoint1, "z : ", dz + 1.0)
+            # alpha1 = angle_to_pink(corners1, center1)
+            # alpha2 = angle_to_pink(corners2, center2)
+            # # print("alpha1 : ", alpha1, "alpha2 : ", alpha2)
+            # dalpha = (alpha1 + alpha2)/2
+            # print("angle to turn by : ", np.radians(dalpha), "dalpha : ", dalpha)
+            # alpha = sensor_data['yaw'] - np.radians(dalpha)
+            # print("alpha : ", alpha)
 
         # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
         ## move to the 1st waypoint ##
-        control_command = [waypoint1[0], waypoint1[1], 1.0+dz, sensor_data['yaw']-alpha]
+        control_command = [waypoint1[0], waypoint1[1], dz, alpha]
     if deltaTime > 13.5:
+        control_command = [waypoint1[0], waypoint1[1], dz, alpha]
+        print("sensor data : ", sensor_data['yaw'], sensor_data['pitch'], sensor_data['roll'])
 
-        control_command = [sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
+        # control_command = [sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
         
     # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
 
@@ -146,6 +153,9 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
     v2 = np.array([c2[0], c2[1], F_PIXEL])
 
     z = (c1[1] + c2[1])/2
+    d_yaw = (c1[0] + c2[0])/2
+    d_yaw = - d_yaw * FOV / WIDTH
+    print("d_yaw : ", d_yaw)
     # print("z : ", z)
 
     theta = z * FOV / WIDTH
@@ -183,7 +193,7 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
 
     H = (F + G)/2 
 
-    return H, dz
+    return H, dz, d_yaw
 
 # rotation from camera frame to body frame
 def C2B(rotationMat) :
