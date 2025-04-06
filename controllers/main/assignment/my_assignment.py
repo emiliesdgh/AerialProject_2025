@@ -32,6 +32,9 @@ F_PIXEL = WIDTH/(2*np.tan(FOV/2))
 
 start_position = True
 second_position = False
+firstWaypoint = True
+secondWaypoint = False
+
 corners1 = None
 corners2 = None
 center1 = None
@@ -43,6 +46,9 @@ R_second = np.eye(3)
 
 alpha = 0
 dz = 0
+deltaT = 7
+control_command = np.zeros(4)
+waypoint = np.zeros(3)
 waypoint1 = np.zeros(3)
 waypoint2 = np.zeros(3)
 waypoint3 = np.zeros(3)
@@ -51,9 +57,9 @@ waypoint5 = np.zeros(3)
 
 
 def get_command(sensor_data, camera_data, dt):
-    global start_time, F_PIXEL
+    global start_time, F_PIXEL, deltaT, control_command, firstWaypoint, secondWaypoint
     global start_position, second_position, corners1, corners2, center1, center2, initial_pos, second_pos, R_initial, R_second
-    global alpha, dz, waypoint1, waypoint2, waypoint3, waypoint4, waypoint5
+    global alpha, dz, waypoint, waypoint1, waypoint2, waypoint3, waypoint4, waypoint5
 
     # NOTE: Displaying the camera image with cv2.imshow() will throw an error because GUI operations should be performed in the main thread.
     # If you want to display the camera image you can call it main.py.
@@ -71,98 +77,50 @@ def get_command(sensor_data, camera_data, dt):
     ## get the camera data
     camera = camera_data.copy()
 
-    control_command = get_waypoint(sensor_data, camera, deltaTime)
 
-    # ## let the drone take off
-    # if deltaTime < 7 :
+    if deltaTime < deltaT+8 and firstWaypoint :
+        # print("Delta Time:", deltaTime)
+        # print("deltaT:", deltaT)
+        deltaTime = time.time() - start_time
 
-    #     control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
+        control_command, waypoint1 = get_waypoint(sensor_data, camera, deltaTime)
+    
+    if deltaTime < deltaT+8 and secondWaypoint :
+        # print("in second waypoint")
+        deltaTime = time.time() - start_time
 
-    # ## once drone stable enough, get starting position information ##
-    # elif deltaTime < 9.5 and deltaTime > 7 :
+        control_command, waypoint2 = get_waypoint(sensor_data, camera, deltaTime)
+        # print("Waypoint 2:", waypoint2)
+    
+    if not firstWaypoint and not secondWaypoint:
+        print("done first and second waypoint")
 
-    #     if start_position :
-    #         ## detect the pink rectangle for image 1 ##
-    #         center1, corners1 = detect_pink_rectangle(camera, False)
-
-    #         ## get the initial position and orientation of the drone ##
-    #         initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
-    #         ## get the rotation matrix from camera frame to body frame to world frame R1 ##
-    #         R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
-    #         R_initial = B2W(R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw)
-
-    #         start_position = False
-    #         second_position = True
-    #         # print("Corners1:", corners1)
-    #         print("Center1:", center1)
-
-    #     ## move drone to the next position for 2nd image ##
-    #     control_command = [0.75, 3.5, 1.0, sensor_data['yaw']+0.1]
-
-    # elif deltaTime < 11 and deltaTime > 9.5:
-    #     ## let drone move to 2nd position ##
-    #     control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
-
-    # ## once drone is stable enough, get the 2nd position information ##
-    # if deltaTime > 11  and deltaTime < 13.5:
-
-    #     if second_position :
-    #         ## detect the pink rectangle for image 2 ##
-    #         center2, corners2 = detect_pink_rectangle(camera, False)
-
-    #         ## get the second position and orientation of the drone ##
-    #         second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
-    #         ## get the rotation matrix from camera frame to body frame to world frame R2 ##
-    #         R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
-    #         R_second = B2W(R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw)
-
-    #         second_position = False
-    #         # print("Corners2:", corners2)
-    #         print("Center2:", center2)
-
-    #         ## triangulate the position of the pink rectangle in the world frame => get 1st waypoint ##
-    #         waypoint1, dz, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
-    #         print("yaw angle : ", sensor_data['yaw'])
-    #         print("alpha from triangulation : ", alpha)
-    #         dz = dz + sensor_data['z_global']
-    #         waypoint1[2] = dz
-
-    #     # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
-    #     ## move to the 1st waypoint ##
-        
-    #     control_command = [waypoint1[0], waypoint1[1], waypoint1[2], alpha]
-
-    # if deltaTime > 13.5 and deltaTime < 15:
-    #     initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
-    #     control_command = [waypoint1[0], waypoint1[1], waypoint1[2], alpha]
-        
-    #     start_position = True
-
-### Waypoint 1 above
-
-    # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
 
     return control_command # Ordered as array with: [pos_x_cmd, pos_y_cmd, pos_z_cmd, yaw_cmd] in meters and radians
 
 def get_waypoint(sensor_data, camera, deltaTime):
-    global start_time, F_PIXEL
+    global start_time, F_PIXEL, deltaT, control_command, firstWaypoint, secondWaypoint
     global start_position, second_position, corners1, corners2, center1, center2, initial_pos, second_pos, R_initial, R_second
-    global alpha, dz, waypoint1, waypoint2, waypoint3, waypoint4, waypoint5
+    global alpha, dz, waypoint, waypoint2
 
     ## let the drone take off
-    if deltaTime < 7 :
+    if deltaTime <  deltaT:
 
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
 
     ## once drone stable enough, get starting position information ##
-    elif deltaTime < 9.5 and deltaTime > 7 :
+    elif deltaTime < deltaT+2.5 and deltaTime > deltaT :
 
         if start_position :
             ## detect the pink rectangle for image 1 ##
             center1, corners1 = detect_pink_rectangle(camera, False)
 
+            # angle = np.arccos(FOV/center1[0])
+            # print("angle : ", angle)
+
             ## get the initial position and orientation of the drone ##
             initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
+            print("initial_pos : ", initial_pos)
             ## get the rotation matrix from camera frame to body frame to world frame R1 ##
             R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
             R_initial = B2W(R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw)
@@ -171,16 +129,24 @@ def get_waypoint(sensor_data, camera, deltaTime):
             second_position = True
             # print("Corners1:", corners1)
             print("Center1:", center1)
-
+        angle = np.arccos(FOV/center1[0])
+        # print("angle : ", angle)
         ## move drone to the next position for 2nd image ##
-        control_command = [0.75, 3.5, 1.0, sensor_data['yaw']+0.1]
+        # control_command = [0.75, 3.5, 1.0, sensor_data['yaw']+0.1]
+        if initial_pos[3] > 0:
+            next_pos = np.array([initial_pos[0]+0.25, initial_pos[1]+0.5, 1.0, initial_pos[3]-0.1])
+        else:
+            next_pos = np.array([initial_pos[0]-0.25, initial_pos[1]-0.5, 1.0, initial_pos[3]+0.1])
+        # print("next_pos : ", next_pos)
+        # control_command = [next_pos[0], next_pos[1], next_pos[2], sensor_data['yaw']+0.1]
+        control_command = [next_pos[0], next_pos[1], next_pos[2], next_pos[3]]
 
-    elif deltaTime < 11 and deltaTime > 9.5:
+    elif deltaTime < deltaT+4 and deltaTime > deltaT+2.5:
         ## let drone move to 2nd position ##
         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
 
     ## once drone is stable enough, get the 2nd position information ##
-    if deltaTime > 11  and deltaTime < 13.5:
+    if deltaTime > deltaT+4  and deltaTime < deltaT+6.5:
 
         if second_position :
             ## detect the pink rectangle for image 2 ##
@@ -188,6 +154,7 @@ def get_waypoint(sensor_data, camera, deltaTime):
 
             ## get the second position and orientation of the drone ##
             second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
+            print("second_pos : ", second_pos)
             ## get the rotation matrix from camera frame to body frame to world frame R2 ##
             R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
             R_second = B2W(R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw)
@@ -197,24 +164,43 @@ def get_waypoint(sensor_data, camera, deltaTime):
             print("Center2:", center2)
 
             ## triangulate the position of the pink rectangle in the world frame => get 1st waypoint ##
-            waypoint1, dz, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
+            waypoint, dz, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
             print("yaw angle : ", sensor_data['yaw'])
             print("alpha from triangulation : ", alpha)
             dz = dz + sensor_data['z_global']
-            waypoint1[2] = dz
+            waypoint[2] = dz
+            print("waypoint : ", waypoint)
 
         # control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
         ## move to the 1st waypoint ##
         
-        control_command = [waypoint1[0], waypoint1[1], waypoint1[2], alpha]
+        control_command = [waypoint[0], waypoint[1], waypoint[2], alpha]
 
-    if deltaTime > 13.5 and deltaTime < 15:
+    if deltaTime > deltaT+6.5 and deltaTime < deltaT+8:
         initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
-        control_command = [waypoint1[0], waypoint1[1], waypoint1[2], alpha]
+        control_command = [waypoint[0], waypoint[1], waypoint[2], alpha]
         
         start_position = True
+        # print("deltaTime:", deltaTime)
+    
+    if deltaTime > deltaT + 7.5 and start_position:
+        print("IN deltaTime = deltaT+8")
+        print("deltaTime:", deltaTime)
+        deltaT = deltaT + 10
+        print("deltaT:", deltaT)
+        firstWaypoint = False
+        secondWaypoint = True
 
-    return control_command
+        if waypoint2.all() != 0:
+            secondWaypoint = False
+        # print("Waypoint:", waypoint)
+
+
+        
+        # return control_command, waypoint
+    # print("Waypoint:", waypoint)
+
+    return control_command, waypoint
     
 
 
@@ -379,6 +365,8 @@ def detect_pink_rectangle(camera, inMain):
             # print("center : ", center)
             # sort the corners
             corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
+            # angle = np.arctan2(center[1], center[0])
+            # print("angle : ", angle)
 
     if inMain :
         cv2.imshow('Mask2', mask)
