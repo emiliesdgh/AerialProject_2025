@@ -8,17 +8,19 @@ FOV = 1.5  # radians
 F_PIXEL = WIDTH / (2 * np.tan(FOV / 2))
 
 # === State Machine === #
-STATE_TAKEOFF = 0
-STATE_CAPTURE_IMAGE_1 = 1
-STATE_MOVE_FOR_IMAGE_2 = 2
-STATE_CAPTURE_IMAGE_2 = 3
-STATE_TRIANGULATE = 4
-STATE_MOVE_TO_WAYPOINT_1 = 5
-STATE_WAIT_AT_WAYPOINT_1 = 6
-STATE_DONE = 7
+# STATE_TAKEOFF = 0
+# STATE_CAPTURE_IMAGE_1 = 1
+# STATE_MOVE_FOR_IMAGE_2 = 2
+# STATE_CAPTURE_IMAGE_2 = 3
+# STATE_TRIANGULATE = 4
+# STATE_MOVE_TO_WAYPOINT_1 = 5
+# STATE_WAIT_AT_WAYPOINT_1 = 6
+# STATE_DONE = 7
+
+MAX_TARGETS = 5
 
 # === Global Variables === #
-state = STATE_TAKEOFF
+# state = STATE_TAKEOFF
 waypoint = np.array([0.0, 0.0, 1.0])
 control_command = [0.0, 0.0, 1.0, 0.0]
 has_taken_off = False  # declare this globally at the top
@@ -28,8 +30,18 @@ captured_second = False
 waypoint_set = False
 at_waypoint = False
 
+mission_state = 0  # 0 = takeoff, 1 = first view, 2 = move, 3 = second view, 4 = triangulate, 5 = go to waypoint, 6 = hold
+target_index = 0   # which pink rectangle we are targeting (0 to 4)
+
+
 start_position = True
 second_position = False
+
+waypoint1 = np.zeros(3)
+waypoint2 = np.zeros(3)
+waypoint3 = np.zeros(3)
+waypoint4 = np.zeros(3)
+waypoint5 = np.zeros(3)
 
 center1 = None
 center2 = None
@@ -75,28 +87,31 @@ def get_command(sensor_data, camera_data, dt):
     return control_command
 
 def get_waypoint(sensor_data, camera):
-    global state, control_command, has_taken_off
+    global control_command, has_taken_off, mission_state, target_index
     global captured_first, moved_to_second_position, captured_second, waypoint_set, at_waypoint
     global start_position, second_position
     global initial_pos, second_pos, new_pos, R_initial, R_second
     global center1, center2, waypoint, alpha
+    global waypoint1, waypoint2, waypoint3, waypoint4, waypoint5
 
-    # # if state == STATE_TAKEOFF:
-    # #     if sensor_data['z_global'] < 0.49:
-    # #         control_command = [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
-    # #     else:
-    # #         state = STATE_CAPTURE_IMAGE_1
 
+    # DONE WITH ALL TARGETS
+    if target_index >= MAX_TARGETS:
+        return [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']], waypoint
+    
     # TAKEOFF
-    if not has_taken_off:
+    # if not has_taken_off:
+    if mission_state == 0:
         if sensor_data['z_global'] < 0.95:
             return [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']], waypoint
         else:
             has_taken_off = True
+            mission_state = 1
             print("Takeoff complete")
 
     # CAPTURE FIRST IMAGE + POSE
-    if has_taken_off and not captured_first:
+    if mission_state == 1:# and not captured_first:
+        time.sleep(2)
         center1, _ = detect_pink_rectangle(camera, False)
         initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
         print("initial_pos : ", initial_pos)
@@ -105,7 +120,8 @@ def get_waypoint(sensor_data, camera):
         # R_initial = B2W(*C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]))
         R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
         R_initial = B2W(R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw)
-        captured_first = True
+        # captured_first = True
+        mission_state = 2
         print("Captured first position and pink rectangle")
 
         if center1[1] < 0 :
@@ -113,19 +129,19 @@ def get_waypoint(sensor_data, camera):
             new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.1]
         elif center1[1] > 0 :
             print("here 2")
-            new_pos = [initial_pos[0]+0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']-0.1]
+            new_pos = [initial_pos[0]+0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.1]
         
         control_command = new_pos
     
     # CONFIRM MOVED TO SECOND POSITION
-    if captured_first and not moved_to_second_position:
+    if mission_state == 2 and not moved_to_second_position:
         # Check if we're close to second position
         if np.sqrt((sensor_data['x_global']-new_pos[0])**2 + (sensor_data['y_global']-new_pos[1])**2) < 0.1:
             moved_to_second_position = True
             print("Moved to second position")
 
     # CAPTURE SECOND IMAGE + POSE
-    if moved_to_second_position and not captured_second:
+    if mission_state == 2 and moved_to_second_position:# and not captured_second:
         center2, _ = detect_pink_rectangle(camera, False)
         second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
         print("second_pos : ", second_pos)
@@ -134,20 +150,30 @@ def get_waypoint(sensor_data, camera):
         R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
         R_second = B2W(R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw)      
         captured_second = True
+        mission_state = 3
         print("Captured second position and pink rectangle")
 
         # TRIANGULATE
         waypoint, dz, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
+        # alpha = alpha - np.deg2rad(30) #- np.deg2rad(45)
+        alpha = sensor_data['yaw'] + alpha
         waypoint[2] = dz + sensor_data['z_global'] # Adjust height
+        print("alpha : ", alpha)
         waypoint_set = True
-        print("Waypoint set:", waypoint)
+        print("Waypoint", target_index+1, "set :", waypoint)
 
-    # # TRIANGULATE
-    # if captured_second and not waypoint_set:
-    #     waypoint, dz, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
-    #     waypoint[2] = dz + sensor_data['z_global'] # Adjust height
-    #     waypoint_set = True
-    #     print("Waypoint set:", waypoint)
+        # SET WAYPOINT
+        if waypoint1.all() == 0 :
+            waypoint1 = waypoint
+        elif waypoint2.all() == 0 :
+            waypoint2 = waypoint
+        elif waypoint3.all() == 0 :
+            waypoint3 = waypoint
+        elif waypoint4.all() == 0 :
+            waypoint4 = waypoint
+        elif waypoint5.all() == 0 :
+            waypoint5 = waypoint
+
 
     # GO TO WAYPOINT
     if waypoint_set and not at_waypoint:
@@ -155,7 +181,18 @@ def get_waypoint(sensor_data, camera):
 
         if dist < 0.15:
             at_waypoint = True
+            time.sleep(2)
+            
             print("Reached waypoint!")
+            print("waypoints : ", waypoint1, waypoint2, waypoint3, waypoint4, waypoint5)
+
+            mission_state = 1
+            target_index += 1   # restart for next target
+            moved_to_second_position = False
+            waypoint_set = False
+            at_waypoint = False
+
+
         control_command = [waypoint[0], waypoint[1], waypoint[2], alpha]
 
     return control_command, waypoint
@@ -208,6 +245,11 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
 
     H = (F + G)/2
     print("H : ", H)
+    if H[0] < 0:
+        H[0] = -H[0]
+    if H[1] < 0:
+        H[1] = -H[1]
+    
 
     return H, dz, d_yaw
 
