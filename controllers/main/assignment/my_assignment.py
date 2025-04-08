@@ -124,12 +124,23 @@ def get_waypoint(sensor_data, camera):
         mission_state = 2
         print("Captured first position and pink rectangle")
 
-        if center1[1] < 0 :
-            print("here 1")
+        # if center1[1] < 0 :
+        #     print("here 1")
+        #     new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.1]
+        # elif center1[1] > 0 :
+        #     print("here 2")
+        #     new_pos = [initial_pos[0]+0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.1]
+
+        if target_index == 0:
             new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.1]
-        elif center1[1] > 0 :
-            print("here 2")
-            new_pos = [initial_pos[0]+0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.1]
+        elif target_index == 1:
+            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.1]
+        elif target_index == 2:
+            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.1]
+        elif target_index == 3:
+            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.1]
+        elif target_index == 4:
+            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.1]
         
         control_command = new_pos
     
@@ -156,7 +167,12 @@ def get_waypoint(sensor_data, camera):
         # TRIANGULATE
         waypoint, dz, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
         # alpha = alpha - np.deg2rad(30) #- np.deg2rad(45)
-        alpha = sensor_data['yaw'] + alpha
+        print("yaw : ", sensor_data['yaw'])
+        # alpha = np.deg2rad(90) - alpha # - np.deg2rad(45)
+        if alpha < 0:
+            alpha = sensor_data['yaw'] 
+        # alpha = alpha #- 0.1 # - np.deg2rad(45)
+        # print("90° in radians : ", np.deg2rad(90))
         waypoint[2] = dz + sensor_data['z_global'] # Adjust height
         print("alpha : ", alpha)
         waypoint_set = True
@@ -193,13 +209,15 @@ def get_waypoint(sensor_data, camera):
             at_waypoint = False
 
 
-        control_command = [waypoint[0], waypoint[1], waypoint[2], alpha]
+        # control_command = [waypoint[0], waypoint[1], waypoint[2], alpha]
+        control_command = [waypoint[0], waypoint[1], waypoint[2], sensor_data['yaw']+0.2]
 
     return control_command, waypoint
 
 
 def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
     '''function to triangulate the position of the pink rectangle in the world frame'''
+    global target_index
 
     v1 = np.array([c1[0], c1[1], F_PIXEL])
     v2 = np.array([c2[0], c2[1], F_PIXEL])
@@ -207,6 +225,8 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
     z = (c1[1] + c2[1])/2
     d_yaw = (c1[0] + c2[0])/2
     d_yaw = - d_yaw * FOV / WIDTH
+    # if d_yaw < 0:
+    #     d_yaw = np.deg2rad(45) + d_yaw
     print("d_yaw : ", d_yaw)
     # print("z : ", z)
 
@@ -240,8 +260,14 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
     # alpha = alpha + 0.5
     # beta = beta + 0.6
 
+    if target_index == 1:
+        alpha = alpha + 2.5
+        beta = beta + 2
+
     F = P + alpha * r
+    print("F : ", F)
     G = Q + beta * s
+    print("G : ", G)
 
     H = (F + G)/2
     print("H : ", H)
@@ -249,6 +275,10 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
         H[0] = -H[0]
     if H[1] < 0:
         H[1] = -H[1]
+
+    if target_index == 1:
+        H[0] = 2*H[0]
+        H[1] = 1.5*H[1]
     
 
     return H, dz, d_yaw
