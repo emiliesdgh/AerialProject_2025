@@ -5,37 +5,27 @@ import cv2
 # === Constants === #
 WIDTH = 300
 FOV = 1.5  # radians
-F_PIXEL = WIDTH / (2 * np.tan(FOV / 2))
-
-# === State Machine === #
-# STATE_TAKEOFF = 0
-# STATE_CAPTURE_IMAGE_1 = 1
-# STATE_MOVE_FOR_IMAGE_2 = 2
-# STATE_CAPTURE_IMAGE_2 = 3
-# STATE_TRIANGULATE = 4
-# STATE_MOVE_TO_WAYPOINT_1 = 5
-# STATE_WAIT_AT_WAYPOINT_1 = 6
-# STATE_DONE = 7
+F_PIXEL = WIDTH / (2 * np.tan(FOV / 2)) # = 161~
 
 MAX_TARGETS = 5
 
 # === Global Variables === #
-# state = STATE_TAKEOFF
 waypoint = np.array([0.0, 0.0, 1.0])
 control_command = [0.0, 0.0, 1.0, 0.0]
-has_taken_off = False  # declare this globally at the top
+
 captured_first = False
 moved_to_second_position = False
 captured_second = False
 waypoint_set = False
 at_waypoint = False
 
-mission_state = 0  # 0 = takeoff, 1 = first view, 2 = move, 3 = second view, 4 = triangulate, 5 = go to waypoint, 6 = hold
-target_index = 0   # which pink rectangle we are targeting (0 to 4)
-
+mission_state = 0  # 0 = takeoff, 1
+target_index = 0   # which waypoint is targeted (0 to 4)
 
 start_position = True
 second_position = False
+
+yaw = 0
 
 waypoint1 = np.zeros(3)
 waypoint2 = np.zeros(3)
@@ -73,39 +63,37 @@ def get_command(sensor_data, camera_data, dt):
     # control_command, waypoint = get_waypoint(sensor_data, camera_data)
 
     # def get_command(sensor_data, camera_data, dt):
-    global has_taken_off, waypoint
+    global waypoint
 
-    # if not has_taken_off:
+    # if not :
     #     if sensor_data['z_global'] < 0.95:
     #         # Keep taking off slowly
     #         return [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']]
     #     else:
-    #         has_taken_off = True  # Reached desired height, move to next phase
+    #          = True  # Reached desired height, move to next phase
 
     # Call waypoint logic after takeoff
     control_command, waypoint = get_waypoint(sensor_data, camera_data)
     return control_command
 
 def get_waypoint(sensor_data, camera):
-    global control_command, has_taken_off, mission_state, target_index
+    global control_command, mission_state, target_index
     global captured_first, moved_to_second_position, captured_second, waypoint_set, at_waypoint
     global start_position, second_position
     global initial_pos, second_pos, new_pos, R_initial, R_second
     global center1, center2, waypoint, alpha
-    global waypoint1, waypoint2, waypoint3, waypoint4, waypoint5
+    global yaw, waypoint1, waypoint2, waypoint3, waypoint4, waypoint5
 
 
     # DONE WITH ALL TARGETS
     if target_index >= MAX_TARGETS:
         return [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']], waypoint
-    
+
     # TAKEOFF
-    # if not has_taken_off:
     if mission_state == 0:
         if sensor_data['z_global'] < 0.95:
             return [sensor_data['x_global'], sensor_data['y_global'], 1.0, sensor_data['yaw']], waypoint
         else:
-            has_taken_off = True
             mission_state = 1
             print("Takeoff complete")
 
@@ -118,8 +106,8 @@ def get_waypoint(sensor_data, camera):
         print("Center1:", center1)
 
         # R_initial = B2W(*C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']]))
-        R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
-        R_initial = B2W(R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw)
+        # R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
+        R_initial = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])#(R_C2B1_roll, R_C2B1_pitch, R_C2B1_yaw)
         # captured_first = True
         mission_state = 2
         print("Captured first position and pink rectangle")
@@ -134,16 +122,16 @@ def get_waypoint(sensor_data, camera):
         if target_index == 0:
             new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.1]
         elif target_index == 1:
-            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.1]
+            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']-0.1]
         elif target_index == 2:
             new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.1]
         elif target_index == 3:
-            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.1]
+            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.15]
         elif target_index == 4:
-            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.1]
-        
+            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.15]
+
         control_command = new_pos
-    
+
     # CONFIRM MOVED TO SECOND POSITION
     if mission_state == 2 and not moved_to_second_position:
         # Check if we're close to second position
@@ -157,38 +145,43 @@ def get_waypoint(sensor_data, camera):
         second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
         print("second_pos : ", second_pos)
         print("Center2:", center2)
-        
-        R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
-        R_second = B2W(R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw)      
+
+        # R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw = C2B([sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw']])
+        R_second = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])#(R_C2B2_roll, R_C2B2_pitch, R_C2B2_yaw)
         captured_second = True
         mission_state = 3
         print("Captured second position and pink rectangle")
 
         # TRIANGULATE
-        waypoint, dz, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
+        waypoint, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
         # alpha = alpha - np.deg2rad(30) #- np.deg2rad(45)
-        print("yaw : ", sensor_data['yaw'])
+        # print("yaw : ", sensor_data['yaw'])
         # alpha = np.deg2rad(90) - alpha # - np.deg2rad(45)
         if alpha < 0:
-            alpha = sensor_data['yaw'] 
+            alpha = sensor_data['yaw']
         # alpha = alpha #- 0.1 # - np.deg2rad(45)
         # print("90° in radians : ", np.deg2rad(90))
-        waypoint[2] = dz + sensor_data['z_global'] # Adjust height
-        print("alpha : ", alpha)
+        # waypoint[2] = dz + sensor_data['z_global'] # Adjust height
+        # print("alpha : ", alpha)
         waypoint_set = True
         print("Waypoint", target_index+1, "set :", waypoint)
 
         # SET WAYPOINT
-        if waypoint1.all() == 0 :
+        if target_index == 0:
             waypoint1 = waypoint
-        elif waypoint2.all() == 0 :
+            yaw = 0
+        elif target_index == 1:
             waypoint2 = waypoint
-        elif waypoint3.all() == 0 :
+            yaw = 0
+        elif target_index == 2:
             waypoint3 = waypoint
-        elif waypoint4.all() == 0 :
+            yaw = np.deg2rad(90)
+        elif target_index == 3:
             waypoint4 = waypoint
-        elif waypoint5.all() == 0 :
+            yaw = np.deg2rad(150)
+        elif target_index == 4:
             waypoint5 = waypoint
+            yaw = np.deg2rad(180)
 
 
     # GO TO WAYPOINT
@@ -198,9 +191,11 @@ def get_waypoint(sensor_data, camera):
         if dist < 0.15:
             at_waypoint = True
             time.sleep(2)
-            
-            print("Reached waypoint!")
+
+            print("Reached waypoint ",target_index+1, " !")
             print("waypoints : ", waypoint1, waypoint2, waypoint3, waypoint4, waypoint5)
+
+            print("Current yaw : ", sensor_data['yaw'])
 
             mission_state = 1
             target_index += 1   # restart for next target
@@ -210,7 +205,8 @@ def get_waypoint(sensor_data, camera):
 
 
         # control_command = [waypoint[0], waypoint[1], waypoint[2], alpha]
-        control_command = [waypoint[0], waypoint[1], waypoint[2], sensor_data['yaw']+0.2]
+        control_command = [waypoint[0], waypoint[1], waypoint[2], alpha + yaw] #sensor_data['yaw']+yaw]
+       
 
     return control_command, waypoint
 
@@ -222,98 +218,42 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
     v1 = np.array([c1[0], c1[1], F_PIXEL])
     v2 = np.array([c2[0], c2[1], F_PIXEL])
 
-    z = (c1[1] + c2[1])/2
     d_yaw = (c1[0] + c2[0])/2
     d_yaw = - d_yaw * FOV / WIDTH
-    # if d_yaw < 0:
-    #     d_yaw = np.deg2rad(45) + d_yaw
-    print("d_yaw : ", d_yaw)
-    # print("z : ", z)
 
-    theta = z * FOV / WIDTH
+    # print("d_yaw : ", target_index, d_yaw)
 
-    dz = - np.tan(theta)
-    # print("dz : ", dz)
-
-    v1 = v1 / np.linalg.norm(v1)
-    v2 = v2 / np.linalg.norm(v2)
-
-    P = np.array([initial_pos[0]+0.03, initial_pos[1], initial_pos[2]])
-    Q = np.array([second_pos[0]+0.03, second_pos[1], second_pos[2]])
+    P = np.array([initial_pos[0]+0.03, initial_pos[1], initial_pos[2]+0.01])
+    Q = np.array([second_pos[0]+0.03, second_pos[1], second_pos[2]+0.01])
 
     r = R1 @ v1
     s = R2 @ v2
 
-    print("r : ", r)
-    print("s : ", s)
+    # print("r : ", r)
+    # print("s : ", s)
 
-    A = np.array([[np.dot(r,r) , -np.dot(s,r)],
-                  [np.dot(r,s) , -np.dot(s,s)]])
+    A = np.column_stack((r, -s))
+    b = Q - P
 
-    b2 = np.dot((Q - P), s)
-    b1 = np.dot((Q - P), r)
-
-    b = np.array([[b1], [b2]])
-
-    alpha, beta = np.linalg.inv(A) @ b
-
-    # alpha = alpha + 0.5
-    # beta = beta + 0.6
-
-    if target_index == 1:
-        alpha = alpha + 2.5
-        beta = beta + 2
+    # alpha, beta = np.linalg.inv(A) @ b
+    alpha_beta = np.linalg.lstsq(A, b, rcond=None)[0]
+    alpha, beta = alpha_beta
 
     F = P + alpha * r
-    print("F : ", F)
+    # print("F : ", F)
     G = Q + beta * s
-    print("G : ", G)
+    # print("G : ", G)
 
     H = (F + G)/2
-    print("H : ", H)
-    if H[0] < 0:
-        H[0] = -H[0]
-    if H[1] < 0:
-        H[1] = -H[1]
+    print("H : ", target_index, H)
 
-    if target_index == 1:
-        H[0] = 2*H[0]
-        H[1] = 1.5*H[1]
-    
-
-    return H, dz, d_yaw
-
-def C2B(rotationMat):
-    # roll, pitch, yaw = rotationMat
-    # R = np.array([[0,  0, 1], 
-    #               [-1, 0, 0], 
-    #               [0, -1, 0]])
-    # angles = R @ np.array([[roll], [pitch], [yaw]])
-    # return angles[0][0], angles[1][0], angles[2][0]
-    '''function to convert the rotation matrix from camera frame to body frame'''
-
-    roll = rotationMat[0]
-    pitch = rotationMat[1]
-    yaw = rotationMat[2]
-
-    angles = np.array([[roll],
-                       [pitch],
-                       [yaw]])
-
-    R = np.array([[0, 0, 1],
-                  [-1, 0, 0,],
-                  [0, -1, 0]])
-
-    Rotation = R @ angles
-
-    Rroll = Rotation[0][0]
-    Rpitch = Rotation[1][0]
-    Ryaw = Rotation[2][0]
-
-    return Rroll, Rpitch, Ryaw
+    return H, d_yaw
 
 def B2W(roll, pitch, yaw):
     '''function to convert the rotation matrix from body frame to world frame'''
+    R_C2B = np.array([[0, 0, 1],
+                  [-1, 0, 0,],
+                  [0, -1, 0]])
 
     R_yaw = np.array([[np.cos(yaw), -np.sin(yaw), 0],
                       [np.sin(yaw),  np.cos(yaw), 0],
@@ -327,7 +267,7 @@ def B2W(roll, pitch, yaw):
                        [0, np.cos(roll), -np.sin(roll)],
                        [0, np.sin(roll),  np.cos(roll)]])
 
-    R = R_yaw @ R_pitch @ R_roll
+    R = R_yaw @ R_pitch @ R_roll @ R_C2B
     return R
 
 def detect_pink_rectangle(camera, inMain):
@@ -373,3 +313,33 @@ def detect_pink_rectangle(camera, inMain):
     if not inMain :
         return center, corners if 'corners' in locals() else None
     return None
+
+
+# def C2B(rotationMat):
+#     # roll, pitch, yaw = rotationMat
+#     # R = np.array([[0,  0, 1],
+#     #               [-1, 0, 0],
+#     #               [0, -1, 0]])
+#     # angles = R @ np.array([[roll], [pitch], [yaw]])
+#     # return angles[0][0], angles[1][0], angles[2][0]
+#     '''function to convert the rotation matrix from camera frame to body frame'''
+
+#     roll = rotationMat[0]
+#     pitch = rotationMat[1]
+#     yaw = rotationMat[2]
+
+#     angles = np.array([[roll],
+#                        [pitch],
+#                        [yaw]])
+
+#     R = np.array([[0, 0, 1],
+#                   [-1, 0, 0,],
+#                   [0, -1, 0]])
+
+#     Rotation = R @ angles
+
+#     Rroll = Rotation[0][0]
+#     Rpitch = Rotation[1][0]
+#     Ryaw = Rotation[2][0]
+
+#     return Rroll, Rpitch, Ryaw
