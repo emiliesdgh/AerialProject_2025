@@ -53,6 +53,9 @@ pid_previous_error = np.zeros(3)
 
 
 
+######## change the fact that the drone turns that much especially for the first waypoitt
+###### maybe doesnt even need to tale the cadre angle, juat turn when no pink
+
 ##### compute position of center compared to center of image
 ## if on the left, move to the left and turn counterclockwise for second position
 ## if on the right, move to the right and turn clockwise for second position
@@ -220,7 +223,7 @@ def get_waypoint(sensor_data, camera):
 
     # CAPTURE FIRST IMAGE + POSE
     if mission_state == 1:
-        time.sleep(2)
+        time.sleep(2) # to diminue 
         center1 = detect_pink_rectangle(camera, False)
         if center1 is None:
             print("No pink rectangle detected")
@@ -240,7 +243,7 @@ def get_waypoint(sensor_data, camera):
         elif target_index == 2:
             new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.05]
         elif target_index == 3:
-            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.1]
+            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.75, initial_pos[2], sensor_data['yaw']+0.1]
         elif target_index == 4:
             new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.1]
 
@@ -310,7 +313,7 @@ def get_waypoint(sensor_data, camera):
     if waypoint_set and not at_waypoint:
         dist = np.sqrt((sensor_data['x_global']-waypoint[0])**2 + (sensor_data['y_global']-waypoint[1])**2)
 
-        if dist < 0.15:
+        if dist < 0.1: # 0.15
             at_waypoint = True
             time.sleep(2)
 
