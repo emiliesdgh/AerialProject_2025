@@ -255,12 +255,12 @@ def get_waypoint(sensor_data, camera):
         # print("Waypoint", target_index+1, "set :", waypoint)
 
         # SET WAYPOINT
-        if target_index < 3:
-            waypoint[0] = waypoint[0] + 0.15
-            waypoint[1] = waypoint[1] + 0.15
-        else:
-            waypoint[0] = waypoint[0] - 0.15
-            waypoint[1] = waypoint[1] - 0.15
+        # if target_index < 3:
+        #     waypoint[0] = waypoint[0] + 0.15
+        #     waypoint[1] = waypoint[1] + 0.15
+        # else:
+        #     waypoint[0] = waypoint[0] - 0.15
+        #     waypoint[1] = waypoint[1] - 0.15
 
         if target_index == 0:
             waypoint1[:3] = waypoint
