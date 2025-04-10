@@ -107,15 +107,20 @@ def get_command(sensor_data, camera_data, dt):
         # Check if lap is done
         if timer_done:
             lap_count += 1
-            if lap_count > MAX_LAPS:
+            if lap_count == MAX_LAPS:
                 print("Mission complete. Hovering...")
-                control_command = [sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
+                control_command = [1.0, 4.0, sensor_data['z_global'], 0.0]#[sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
             else:
                 print(f"Lap {lap_count} starting...")
                 timer_done = None
                 timer = None
                 index_current_setpoint = 0
                 control_command = setpoints[0]
+
+    # if lap_count == MAX_LAPS:
+    #     # Hover at the last setpoint
+    #     control_command = [sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
+    #     return control_command
 
     return control_command
 
