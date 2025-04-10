@@ -17,6 +17,7 @@ control_command = [0.0, 0.0, 1.0, 0.0]
 moved_to_second_position = False
 waypoint_set = False
 at_waypoint = False
+nopink = True
 
 mission_state = 0  # 0 = takeoff
 target_index = 0   # which waypoint is targeted (0 to 4)
@@ -26,6 +27,7 @@ start_timed = False
 timer = None
 timer_done = None
 index_current_setpoint = 0
+
 
 setpoints = np.zeros((6, 4))
 waypoint1 = np.zeros(4)
@@ -63,9 +65,18 @@ def get_command(sensor_data, camera_data, dt):
     # #     return control_command
 
     # # ---- YOUR CODE HERE ----
-    global waypoint, control_command, target_index, start_timed, index_current_setpoint, timer, lap_count, setpoints, timer_done
+    global waypoint, control_command, target_index, start_timed, index_current_setpoint, timer
+    global lap_count, setpoints, timer_done, nopink
 
     # Get all Waypoints
+    if nopink :
+        center1, _ = detect_pink_rectangle(camera_data, False)
+        if center1 is not None:
+            nopink = False
+            print("Pink rectangle detected")
+        else:
+            print("No pink rectangle detected")
+            return noPinkTurn(sensor_data)
     #### verifier si y'a du rose dans la camera sinon faut tourner jusqu'à ce qu'il y'en ai
     if target_index < MAX_TARGETS:
         control_command, waypoint = get_waypoint(sensor_data, camera_data)
@@ -210,7 +221,10 @@ def get_waypoint(sensor_data, camera):
     # CAPTURE FIRST IMAGE + POSE
     if mission_state == 1:
         time.sleep(2)
-        center1, _ = detect_pink_rectangle(camera, False)
+        center1 = detect_pink_rectangle(camera, False)
+        if center1 is None:
+            print("No pink rectangle detected")
+            return noPinkTurn(sensor_data), waypoint
         initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
         # print("initial_pos : ", initial_pos)
         # print("Center1:", center1)
@@ -220,15 +234,15 @@ def get_waypoint(sensor_data, camera):
         # print("Captured first position and pink rectangle")
 
         if target_index == 0:
-            new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.1]
+            new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.05]
         elif target_index == 1:
-            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']-0.1]
+            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']-0.05]
         elif target_index == 2:
-            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.1]
+            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.05]
         elif target_index == 3:
-            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.15]
+            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.1]
         elif target_index == 4:
-            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.15]
+            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.5, initial_pos[2], sensor_data['yaw']+0.1]
 
         control_command = new_pos
 
@@ -241,7 +255,10 @@ def get_waypoint(sensor_data, camera):
 
     # CAPTURE SECOND IMAGE + POSE
     if mission_state == 2 and moved_to_second_position:
-        center2, _ = detect_pink_rectangle(camera, False)
+        center2 = detect_pink_rectangle(camera, False)
+        if center2 is None:
+            print("No pink rectangle detected")
+            return noPinkTurn(sensor_data), waypoint
         second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
         # print("second_pos : ", second_pos)
         # print("Center2:", center2)
@@ -377,6 +394,8 @@ def detect_pink_rectangle(camera, inMain):
     min_aera = 50
     contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_aera]
 
+    centerXmin = -160
+
     for cnt in contours:
         epsilon = 0.02 * cv2.arcLength(cnt, True)  # Approximation accuracy
         approx = cv2.approxPolyDP(cnt, epsilon, True)
@@ -385,19 +404,29 @@ def detect_pink_rectangle(camera, inMain):
             corners = approx.reshape(4, 2)  # Convert to a (4,2) array
 
             centerDraw = np.mean(corners, axis=0)
-            draw_center = tuple(np.round(centerDraw).astype(int))
-            cv2.circle(mask, draw_center, 5, 0, -1)
-            # change origin to the center of the image
-            corners = corners - WIDTH/2
-            # get center of the rectangle
-            center = np.mean(corners, axis=0)
-            # sort the corners
-            corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
+            if centerDraw[0] > centerXmin:
+                centerXmin = centerDraw[0]
+                draw_center = tuple(np.round(centerDraw).astype(int))
+                cv2.circle(mask, draw_center, 5, 0, -1)
+                # change origin to the center of the image
+                corners = corners - WIDTH/2
+                # get center of the rectangle
+                center = np.mean(corners, axis=0)
+                # sort the corners
+                corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
+            else: 
+                continue
 
     if inMain :
         cv2.imshow('Mask2', mask)
         cv2.waitKey(1)
 
     if not inMain :
-        return center, corners if 'corners' in locals() else None
+        return center if 'center' in locals() else None
     return None
+
+def noPinkTurn(sensor_data):
+    '''function to turn until pink rectangle is detected'''
+    global nopink
+
+    return [sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']+0.15]
