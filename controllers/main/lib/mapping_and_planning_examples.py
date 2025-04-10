@@ -54,7 +54,7 @@ def path_planning(sensor_data, dt, setpoints, tol):
 
     # Start timer
     if (index_current_setpoint == 1) & (timer is None):
-        timer = dt
+        timer = 0
         print("Time recording started")
     if timer is not None:
         timer += dt

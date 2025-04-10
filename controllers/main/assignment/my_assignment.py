@@ -2,15 +2,13 @@ import numpy as np
 import time
 import cv2
 
-# === Imports === #
-from lib.mapping_and_planning_examples import path_planning
-
 # === Constants === #
 WIDTH = 300
 FOV = 1.5  # radians
 F_PIXEL = WIDTH / (2 * np.tan(FOV / 2)) # = 161~
 
 MAX_TARGETS = 5
+MAX_LAPS = 3
 
 # === Global Variables === #
 waypoint = np.array([0.0, 0.0, 1.0])
@@ -22,7 +20,14 @@ at_waypoint = False
 
 mission_state = 0  # 0 = takeoff
 target_index = 0   # which waypoint is targeted (0 to 4)
+lap_count = 1#0
 
+start_timed = False
+timer = None
+timer_done = None
+index_current_setpoint = 0
+
+setpoints = np.zeros((6, 4))
 waypoint1 = np.zeros(4)
 waypoint2 = np.zeros(4)
 waypoint3 = np.zeros(4)
@@ -40,6 +45,11 @@ alpha = 0
 yaw = 0
 
 
+# PID states
+pid_integral = np.zeros(3)
+pid_previous_error = np.zeros(3)
+
+
 
 ##### compute position of center compared to center of image
 ## if on the left, move to the left and turn counterclockwise for second position
@@ -53,17 +63,126 @@ def get_command(sensor_data, camera_data, dt):
     # #     return control_command
 
     # # ---- YOUR CODE HERE ----
-    global waypoint, control_command, target_index
+    global waypoint, control_command, target_index, start_timed, index_current_setpoint, timer, lap_count, setpoints, timer_done
 
     # Get all Waypoints
     #### verifier si y'a du rose dans la camera sinon faut tourner jusqu'à ce qu'il y'en ai
     if target_index < MAX_TARGETS:
         control_command, waypoint = get_waypoint(sensor_data, camera_data)
 
-    if target_index == MAX_TARGETS :
-        path_planning(sensor_data, dt, [waypoint1, waypoint2, waypoint3, waypoint4, waypoint5], 0.1)
+    # # if target_index == MAX_TARGETS:
+
+    # #     if lap_count == 1:
+    # #         setpoints = np.array([waypoint1, waypoint2, waypoint3, waypoint4, waypoint5])
+    # #         print("setpoints : ", setpoints)
+    # #         print("First lap complete and waypoints set")
+    # #         lap_count += 1
+    # #     if lap_count > 1 and lap_count <= MAX_LAPS:
+    # #         control_command = trajectory_tracking(sensor_data, dt, setpoints, 0.1)
+    # #     # elif lap_count == 2:
+
+
+        # When first lap is done, initialize setpoints
+    if target_index == MAX_TARGETS and not start_timed:
+        setpoints[0][:] = [1.0, 4.0, sensor_data['z_global'], 0.0]
+        setpoints[1][:] = waypoint1
+        setpoints[2][:] = waypoint2
+        setpoints[3][:] = waypoint3
+        setpoints[4][:] = waypoint4
+        setpoints[5][:] = waypoint5
+
+        start_timed = True
+        index_current_setpoint = 0
+        timer = None
+        print("All waypoints acquired. Starting lap", lap_count)
+        return [1.0, 4.0, sensor_data['z_global'], 0.0]
+
+    # Laps 2 and beyond
+    if start_timed and lap_count <= MAX_LAPS:
+        # Follow setpoints using PID (you could also use minimum snap trajectory or similar)
+        setpoints_array = [setpoints[i] for i in range(6)]
+        timepoints = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]  # optional if using time-based
+        control_command = trajectory_tracking(sensor_data, dt, setpoints, 0.1)#timepoints, setpoints_array, 0.15)
+
+        # Check if lap is done
+        if timer_done:
+            lap_count += 1
+            if lap_count > MAX_LAPS:
+                print("Mission complete. Hovering...")
+                control_command = [sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
+            else:
+                print(f"Lap {lap_count} starting...")
+                timer_done = None
+                timer = None
+                index_current_setpoint = 0
+                control_command = setpoints[0]
 
     return control_command
+
+def trajectory_tracking(sensor_data, dt, setpoints, tol):#, repeat=False):
+    global index_current_setpoint, timer, lap_count
+
+    if lap_count >= MAX_LAPS:
+        return [setpoints[0][0], setpoints[0][1], setpoints[0][2], setpoints[0][3]]  # hover
+        # return [sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]  # hover
+
+    if index_current_setpoint == 0 and timer is None:
+        timer = 0
+        print(f"Starting Lap {lap_count + 1}")
+
+    if timer is not None:
+        timer += dt
+
+    end_point = setpoints[-1]
+
+    if index_current_setpoint < len(setpoints):
+        current_setpoint = setpoints[index_current_setpoint]
+        # print(f"Current setpoint: {current_setpoint}")
+        x, y, z = sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global']
+        distance = np.linalg.norm([x - current_setpoint[0], y - current_setpoint[1], z - current_setpoint[2]])
+
+        if distance < tol:
+            index_current_setpoint += 1
+    else:
+        # Lap complete
+        lap_count += 1
+        index_current_setpoint = 0
+        timer = None
+        print(f"Lap {lap_count} completed!")
+
+    if index_current_setpoint < len(setpoints):
+        # return pid_controller(sensor_data, setpoints[index_current_setpoint], dt)
+        return [setpoints[index_current_setpoint][0], setpoints[index_current_setpoint][1], setpoints[index_current_setpoint][2], setpoints[index_current_setpoint][3]]
+    else:
+        # return [sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
+        return [setpoints[0][0], setpoints[0][1], setpoints[0][2], setpoints[0][3]]
+
+
+
+def pid_controller(sensor_data, target, dt):
+    global pid_integral, pid_previous_error
+
+    # PID constants (tune these)
+    Kp = np.array([1.2, 1.2, 1.0])
+    Ki = np.array([0.0, 0.0, 0.0])
+    Kd = np.array([0.4, 0.4, 0.3])
+
+    pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global']])
+    error = target[:3] - pos
+
+    pid_integral += error * dt
+    derivative = (error - pid_previous_error) / dt
+    pid_previous_error = error
+
+    control = Kp * error + Ki * pid_integral + Kd * derivative
+
+    # Clip velocity commands if needed
+    control = np.clip(control, -1.0, 1.0)  # example limits
+
+    yaw = target[3] if len(target) > 3 else sensor_data['yaw']
+    return [pos[0] + control[0], pos[1] + control[1], pos[2] + control[2], yaw]
+
+
 
 def get_waypoint(sensor_data, camera):
     '''function to get the waypoint to go to'''
@@ -88,12 +207,12 @@ def get_waypoint(sensor_data, camera):
         time.sleep(2)
         center1, _ = detect_pink_rectangle(camera, False)
         initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
-        print("initial_pos : ", initial_pos)
-        print("Center1:", center1)
+        # print("initial_pos : ", initial_pos)
+        # print("Center1:", center1)
 
         R_initial = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
         mission_state = 2
-        print("Captured first position and pink rectangle")
+        # print("Captured first position and pink rectangle")
 
         if target_index == 0:
             new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.1]
@@ -113,18 +232,18 @@ def get_waypoint(sensor_data, camera):
         # Check if we're close to second position
         if np.sqrt((sensor_data['x_global']-new_pos[0])**2 + (sensor_data['y_global']-new_pos[1])**2) < 0.1:
             moved_to_second_position = True
-            print("Moved to second position")
+            # print("Moved to second position")
 
     # CAPTURE SECOND IMAGE + POSE
     if mission_state == 2 and moved_to_second_position:
         center2, _ = detect_pink_rectangle(camera, False)
         second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
-        print("second_pos : ", second_pos)
-        print("Center2:", center2)
+        # print("second_pos : ", second_pos)
+        # print("Center2:", center2)
 
         R_second = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
         mission_state = 3
-        print("Captured second position and pink rectangle")
+        # print("Captured second position and pink rectangle")
 
         # TRIANGULATE
         waypoint, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
@@ -133,9 +252,16 @@ def get_waypoint(sensor_data, camera):
             alpha = sensor_data['yaw']
 
         waypoint_set = True
-        print("Waypoint", target_index+1, "set :", waypoint)
+        # print("Waypoint", target_index+1, "set :", waypoint)
 
         # SET WAYPOINT
+        if target_index < 3:
+            waypoint[0] = waypoint[0] + 0.15
+            waypoint[1] = waypoint[1] + 0.15
+        else:
+            waypoint[0] = waypoint[0] - 0.15
+            waypoint[1] = waypoint[1] - 0.15
+
         if target_index == 0:
             waypoint1[:3] = waypoint
             waypoint1[3] = sensor_data['yaw']
@@ -166,24 +292,21 @@ def get_waypoint(sensor_data, camera):
             at_waypoint = True
             time.sleep(2)
 
-            print("Reached waypoint ",target_index+1, " !")
+            print("Reached waypoint",target_index+1, "!")
             print("waypoints : ", waypoint1, waypoint2, waypoint3, waypoint4, waypoint5)
-
-            # print("Current yaw : ", sensor_data['yaw'])
 
             mission_state = 1
             target_index += 1   # restart for next target
             moved_to_second_position = False
             waypoint_set = False
             at_waypoint = False
-            print("target_index : ", target_index)
+            # print("target_index : ", target_index)
 
 
         # control_command = [waypoint[0], waypoint[1], waypoint[2], alpha]
         control_command = [waypoint[0], waypoint[1], waypoint[2], alpha + yaw] #sensor_data['yaw']+yaw]
-       
-    return control_command, waypoint
 
+    return control_command, waypoint
 
 def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
     '''function to triangulate the position of the pink rectangle in the world frame'''
@@ -212,7 +335,7 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
     G = Q + beta * s
 
     H = (F + G)/2
-    print("H : ", target_index, H)
+    # print("H : ", target_index, H)
 
     return H, d_yaw
 
