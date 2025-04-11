@@ -74,7 +74,7 @@ def get_command(sensor_data, camera_data, dt):
     # Get all Waypoints
     if nopink :
         R = np.zeros((3, 3))
-        center1, _ = detect_pink_rectangle(sensor_data, camera_data, R, False)
+        center1 = detect_pink_rectangle(sensor_data, camera_data, R, False)
         if center1 is not None:
             nopink = False
             print("Pink rectangle detected")
@@ -407,6 +407,7 @@ def B2W(roll, pitch, yaw):
 
 def detect_pink_rectangle(sensor_data, camera, R, inMain):
     '''function to detect the pink rectangle in the camera frame'''
+    global mission_state
 
     HSV_img = cv2.cvtColor(camera, cv2.COLOR_BGR2HSV)
     lower_pink = np.array([140, 50, 50])
@@ -418,7 +419,7 @@ def detect_pink_rectangle(sensor_data, camera, R, inMain):
     contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_aera]
 
     # distToCenterMin = 160
-    centerXMin = -10
+    centerXMin = -160
 
     for cnt in contours:
         epsilon = 0.02 * cv2.arcLength(cnt, True)  # Approximation accuracy
@@ -429,12 +430,17 @@ def detect_pink_rectangle(sensor_data, camera, R, inMain):
 
             centerDraw = np.mean(corners, axis=0)
 
-            if centerDraw[0] <= 10:
-                print("centerDraw[0] : ", centerDraw[0])
-                continue
+            # if corners[0,0] < 10 and corners[1,0] < 10 and mission_state !=0:
+            #     print("corners : ", corners)
+            #     print("centerDraw[0] : ", centerDraw[0])
+            #     continue
             #### add the distance to get the closest rectangle even if there's one more on the right
 #####################################################################################################            
             if centerDraw[0] > centerXMin:# and centerDraw[0] >= -110:
+                if corners[0,0] < 7 and corners[1,0] < 7 and mission_state !=0:   #corners[0,0] < 10 and corners[1,0] < 10 and mission_state !=0:
+                    print("corners : ", corners)
+                    print("centerDraw[0] : ", centerDraw[0])
+                    continue
                 centerXMin = centerDraw[0] 
                 draw_center = tuple(np.round(centerDraw).astype(int))
                 cv2.circle(mask, draw_center, 5, 0, -1)
