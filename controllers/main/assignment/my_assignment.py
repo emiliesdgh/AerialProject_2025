@@ -73,12 +73,13 @@ def get_command(sensor_data, camera_data, dt):
 
     # Get all Waypoints
     if nopink :
-        center1, _ = detect_pink_rectangle(camera_data, False)
+        R = np.zeros((3, 3))
+        center1, _ = detect_pink_rectangle(sensor_data, camera_data, R, False)
         if center1 is not None:
             nopink = False
             print("Pink rectangle detected")
         else:
-            print("No pink rectangle detected")
+            print("No pink rectangle detected BEFORE GET_WAYPOINT")
             return noPinkTurn(sensor_data)
     #### verifier si y'a du rose dans la camera sinon faut tourner jusqu'à ce qu'il y'en ai
     if target_index < MAX_TARGETS:
@@ -224,15 +225,20 @@ def get_waypoint(sensor_data, camera):
     # CAPTURE FIRST IMAGE + POSE
     if mission_state == 1:
         time.sleep(2) # to diminue 
-        center1 = detect_pink_rectangle(camera, False)
-        if center1 is None:
-            print("No pink rectangle detected")
-            return noPinkTurn(sensor_data), waypoint
         initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
-        # print("initial_pos : ", initial_pos)
-        # print("Center1:", center1)
 
         R_initial = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
+
+        center1 = detect_pink_rectangle(sensor_data, camera, R_initial, False)
+        if center1 is None:
+            print("No pink rectangle detected IMG1")
+            return noPinkTurn(sensor_data), waypoint
+        
+        # initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
+        # print("initial_pos : ", initial_pos)
+        print("Center1:", center1)
+
+        # R_initial = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
         mission_state = 2
         # print("Captured first position and pink rectangle")
 
@@ -258,23 +264,34 @@ def get_waypoint(sensor_data, camera):
 
     # CAPTURE SECOND IMAGE + POSE
     if mission_state == 2 and moved_to_second_position:
-        center2 = detect_pink_rectangle(camera, False)
-        if center2 is None:
-            print("No pink rectangle detected")
-            return noPinkTurn(sensor_data), waypoint
         second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
-        # print("second_pos : ", second_pos)
-        # print("Center2:", center2)
 
         R_second = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
+
+        center2 = detect_pink_rectangle(sensor_data, camera, R_second, False)
+        if center2 is None:
+            print("No pink rectangle detected IMG2")
+            return noPinkTurn(sensor_data), waypoint
+        
+        # second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
+        # print("second_pos : ", second_pos)
+        print("Center2:", center2)
+
+        print("angle before triangulation : ", sensor_data['yaw'])
+
+        # R_second = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
         mission_state = 3
         # print("Captured second position and pink rectangle")
 
         # TRIANGULATE
-        waypoint, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
+        # waypoint, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
+        waypoint = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
+        # print("alpha : ", alpha)
 
-        if alpha < 0:
-            alpha = sensor_data['yaw']
+        # if alpha < 0:
+        #     alpha = sensor_data['yaw']
+        
+        alpha = np.deg2rad(0)
 
         waypoint_set = True
         # print("Waypoint", target_index+1, "set :", waypoint)
@@ -294,7 +311,7 @@ def get_waypoint(sensor_data, camera):
         elif target_index == 1:
             waypoint2[:3] = waypoint
             waypoint2[3] = sensor_data['yaw']
-            yaw = 0
+            yaw = np.deg2rad(45)
         elif target_index == 2:
             waypoint3[:3] = waypoint
             waypoint3[3] = sensor_data['yaw']
@@ -306,7 +323,8 @@ def get_waypoint(sensor_data, camera):
         elif target_index == 4:
             waypoint5[:3] = waypoint
             waypoint5[3] = sensor_data['yaw']
-            yaw = np.deg2rad(180)
+            # yaw = np.deg2rad(180)
+            yaw = np.deg2rad(-90)
 
 
     # GO TO WAYPOINT
@@ -340,8 +358,10 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
     v1 = np.array([c1[0], c1[1], F_PIXEL])
     v2 = np.array([c2[0], c2[1], F_PIXEL])
 
-    d_yaw = (c1[0] + c2[0])/2
-    d_yaw = - d_yaw * FOV / WIDTH
+    # d_yaw = c2[0]/2#(c1[0] + c2[0])/2
+    # d_yaw = np.arctan2(d_yaw, F_PIXEL)
+    # d_yaw = - d_yaw * FOV / WIDTH
+    # print("current Drone angle :", second_pos[3])
     # print("d_yaw : ", target_index, d_yaw)
 
     P = np.array([initial_pos[0]+0.03, initial_pos[1], initial_pos[2]+0.01])
@@ -362,7 +382,7 @@ def triangulate(c1, c2, initial_pos, second_pos, R1, R2):
     H = (F + G)/2
     # print("H : ", target_index, H)
 
-    return H, d_yaw
+    return H#, d_yaw
 
 def B2W(roll, pitch, yaw):
     '''function to convert the rotation matrix from body frame to world frame'''
@@ -385,7 +405,7 @@ def B2W(roll, pitch, yaw):
     R = R_yaw @ R_pitch @ R_roll @ R_C2B
     return R
 
-def detect_pink_rectangle(camera, inMain):
+def detect_pink_rectangle(sensor_data, camera, R, inMain):
     '''function to detect the pink rectangle in the camera frame'''
 
     HSV_img = cv2.cvtColor(camera, cv2.COLOR_BGR2HSV)
@@ -397,7 +417,8 @@ def detect_pink_rectangle(camera, inMain):
     min_aera = 50
     contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_aera]
 
-    centerXmin = -160
+    # distToCenterMin = 160
+    centerXMin = -10
 
     for cnt in contours:
         epsilon = 0.02 * cv2.arcLength(cnt, True)  # Approximation accuracy
@@ -407,8 +428,14 @@ def detect_pink_rectangle(camera, inMain):
             corners = approx.reshape(4, 2)  # Convert to a (4,2) array
 
             centerDraw = np.mean(corners, axis=0)
-            if centerDraw[0] > centerXmin:
-                centerXmin = centerDraw[0]
+
+            if centerDraw[0] <= 10:
+                print("centerDraw[0] : ", centerDraw[0])
+                continue
+            #### add the distance to get the closest rectangle even if there's one more on the right
+#####################################################################################################            
+            if centerDraw[0] > centerXMin:# and centerDraw[0] >= -110:
+                centerXMin = centerDraw[0] 
                 draw_center = tuple(np.round(centerDraw).astype(int))
                 cv2.circle(mask, draw_center, 5, 0, -1)
                 # change origin to the center of the image
@@ -419,6 +446,9 @@ def detect_pink_rectangle(camera, inMain):
                 corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
             else: 
                 continue
+        # centerInWorld = R @ np.array([centerDraw[0], centerDraw[1], F_PIXEL])
+        # distance_to_center = np.sqrt((sensor_data['x_global']-centerInWorld[0])**2 + (sensor_data['y_global']-centerInWorld[1])**2)
+        # print("distance_to_center : ", distance_to_center)
 
     if inMain :
         cv2.imshow('Mask2', mask)

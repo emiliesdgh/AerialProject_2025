@@ -750,7 +750,8 @@ if __name__ == '__main__':
 
             # Update the drone status in simulation
             drone.step(motorPower, sensor_data)
-            assignment.detect_pink_rectangle(camera_data, True)
+            RForDetectPink = np.zeros((3, 3))
+            assignment.detect_pink_rectangle(sensor_data, camera_data, RForDetectPink , True)
     
     except KeyboardInterrupt:
         running = False
