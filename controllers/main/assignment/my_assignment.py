@@ -128,31 +128,26 @@ def get_command(sensor_data, camera_data, dt):
     # Laps 2 and beyond
     if start_timed and lap_count <= MAX_LAPS:
         # Follow setpoints using PID (you could also use minimum snap trajectory or similar)
-        setpoints_array = [setpoints[i] for i in range(6)]
-        timepoints = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]  # optional if using time-based
+        # setpoints_array = [setpoints[i] for i in range(6)]
+        # timepoints = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]  # optional if using time-based
         control_command = trajectory_tracking(sensor_data, dt, setpoints, 0.1)#timepoints, setpoints_array, 0.15)
         # print(help(PID.setpoint_to_pwm))
         # motorPower = PID.setpoint_to_pwm(dt, setpoints, sensor_data)   
         # print("Motor power: ", motorPower)
 
-        # control_command = trajectory_tracking(sensor_data, dt, setpointsPID, 0.1)
         # Check if lap is done
         if timer_done:
             lap_count += 1
-            if lap_count == MAX_LAPS:
-                print("Mission complete. Hovering...")
-                control_command = [1.0, 4.0, sensor_data['z_global'], 0.0]#[sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
-            else:
+            # if lap_count == MAX_LAPS:
+            #     print("Mission complete. Hovering...")
+            #     control_command = [1.0, 4.0, sensor_data['z_global'], 0.0]#[sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
+            # else:
+            if lap_count != MAX_LAPS:
                 print(f"Lap {lap_count} starting...")
                 timer_done = None
                 timer = None
                 index_current_setpoint = 0
                 control_command = setpoints[0]
-
-    # if lap_count == MAX_LAPS:
-    #     # Hover at the last setpoint
-    #     control_command = [sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
-    #     return control_command
 
     return control_command
 
@@ -170,11 +165,11 @@ def trajectory_tracking(sensor_data, dt, setpoints, tol):#, repeat=False):
     if timer is not None:
         timer += dt
 
-    end_point = setpoints[-1]
+    # end_point = setpoints[-1]
 
     if index_current_setpoint < len(setpoints):
         current_setpoint = setpoints[index_current_setpoint]
-        # print(f"Current setpoint: {current_setpoint}")
+
         x, y, z = sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global']
         distance = np.linalg.norm([x - current_setpoint[0], y - current_setpoint[1], z - current_setpoint[2]])
 
@@ -193,30 +188,6 @@ def trajectory_tracking(sensor_data, dt, setpoints, tol):#, repeat=False):
     else:
         # return [sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
         return [setpoints[0][0], setpoints[0][1], setpoints[0][2], setpoints[0][3]]
-
-
-def pid_controller(sensor_data, target, dt):
-    global pid_integral, pid_previous_error
-
-    # PID constants (tune these)
-    Kp = np.array([1.2, 1.2, 1.0])
-    Ki = np.array([0.0, 0.0, 0.0])
-    Kd = np.array([0.4, 0.4, 0.3])
-
-    pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global']])
-    error = target[:3] - pos
-
-    pid_integral += error * dt
-    derivative = (error - pid_previous_error) / dt
-    pid_previous_error = error
-
-    control = Kp * error + Ki * pid_integral + Kd * derivative
-
-    # Clip velocity commands if needed
-    control = np.clip(control, -1.0, 1.0)  # example limits
-
-    yaw = target[3] if len(target) > 3 else sensor_data['yaw']
-    return [pos[0] + control[0], pos[1] + control[1], pos[2] + control[2], yaw]
 
 
 def get_waypoint(sensor_data, camera):
