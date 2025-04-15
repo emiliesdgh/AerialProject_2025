@@ -2,6 +2,9 @@ import numpy as np
 import time
 import cv2
 
+# === Imports === #
+from exercises import ex1_pid_control as PID
+
 # === Constants === #
 WIDTH = 300
 FOV = 1.5  # radians
@@ -51,10 +54,17 @@ yaw = 0
 pid_integral = np.zeros(3)
 pid_previous_error = np.zeros(3)
 
+# === Class === #
+PID_control = PID()
 
+########### create function that analyses the center the detect pink rectangle returns 
+########### and if there is several centers keep the closest one to the drone
+########### so the pink function is just to detect if pink and if so return the return of this function
+########### if more than 1 door in the image, take the closest one => calculate the distance
 
-######## change the fact that the drone turns that much especially for the first waypoitt
+######## change the fact that the drone turns that much especially for the first waypoint
 ###### maybe doesnt even need to tale the cadre angle, juat turn when no pink
+###### dron maybe doesn't need to turn at all if there's a condition on the fact that is doesn't see pink it turns
 
 ##### compute position of center compared to center of image
 ## if on the left, move to the left and turn counterclockwise for second position
@@ -77,9 +87,9 @@ def get_command(sensor_data, camera_data, dt):
         center1 = detect_pink_rectangle(sensor_data, camera_data, R, False)
         if center1 is not None:
             nopink = False
-            print("Pink rectangle detected")
+            # print("Pink rectangle detected")
         else:
-            print("No pink rectangle detected BEFORE GET_WAYPOINT")
+            # print("No pink rectangle detected BEFORE GET_WAYPOINT")
             return noPinkTurn(sensor_data)
     #### verifier si y'a du rose dans la camera sinon faut tourner jusqu'à ce qu'il y'en ai
     if target_index < MAX_TARGETS:
@@ -118,6 +128,7 @@ def get_command(sensor_data, camera_data, dt):
         setpoints_array = [setpoints[i] for i in range(6)]
         timepoints = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]  # optional if using time-based
         control_command = trajectory_tracking(sensor_data, dt, setpoints, 0.1)#timepoints, setpoints_array, 0.15)
+        # control_command = PID_control.keys_to_pwm(dt, control_command, sensor_data)    
 
         # Check if lap is done
         if timer_done:
@@ -178,7 +189,6 @@ def trajectory_tracking(sensor_data, dt, setpoints, tol):#, repeat=False):
         return [setpoints[0][0], setpoints[0][1], setpoints[0][2], setpoints[0][3]]
 
 
-
 def pid_controller(sensor_data, target, dt):
     global pid_integral, pid_previous_error
 
@@ -201,7 +211,6 @@ def pid_controller(sensor_data, target, dt):
 
     yaw = target[3] if len(target) > 3 else sensor_data['yaw']
     return [pos[0] + control[0], pos[1] + control[1], pos[2] + control[2], yaw]
-
 
 
 def get_waypoint(sensor_data, camera):
@@ -231,12 +240,12 @@ def get_waypoint(sensor_data, camera):
 
         center1 = detect_pink_rectangle(sensor_data, camera, R_initial, False)
         if center1 is None:
-            print("No pink rectangle detected IMG1")
+            # print("No pink rectangle detected IMG1")
             return noPinkTurn(sensor_data), waypoint
         
         # initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
         # print("initial_pos : ", initial_pos)
-        print("Center1:", center1)
+        # print("Center1:", center1)
 
         # R_initial = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
         mission_state = 2
@@ -270,14 +279,14 @@ def get_waypoint(sensor_data, camera):
 
         center2 = detect_pink_rectangle(sensor_data, camera, R_second, False)
         if center2 is None:
-            print("No pink rectangle detected IMG2")
+            # print("No pink rectangle detected IMG2")
             return noPinkTurn(sensor_data), waypoint
         
         # second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
         # print("second_pos : ", second_pos)
-        print("Center2:", center2)
+        # print("Center2:", center2)
 
-        print("angle before triangulation : ", sensor_data['yaw'])
+        # print("angle before triangulation : ", sensor_data['yaw'])
 
         # R_second = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
         mission_state = 3
@@ -335,7 +344,7 @@ def get_waypoint(sensor_data, camera):
             at_waypoint = True
             time.sleep(2)
 
-            print("Reached waypoint",target_index+1, "!")
+            # print("Reached waypoint",target_index+1, "!")
             print("waypoints : ", waypoint1, waypoint2, waypoint3, waypoint4, waypoint5)
 
             mission_state = 1
@@ -437,9 +446,8 @@ def detect_pink_rectangle(sensor_data, camera, R, inMain):
             #### add the distance to get the closest rectangle even if there's one more on the right
 #####################################################################################################            
             if centerDraw[0] > centerXMin:# and centerDraw[0] >= -110:
-                if corners[0,0] < 7 and corners[1,0] < 7 and mission_state !=0:   #corners[0,0] < 10 and corners[1,0] < 10 and mission_state !=0:
-                    print("corners : ", corners)
-                    print("centerDraw[0] : ", centerDraw[0])
+                # if the rectangle is too much on the left side, turn to center it a bit more
+                if corners[0,0] < 7 and corners[1,0] < 7 and mission_state !=0:
                     continue
                 centerXMin = centerDraw[0] 
                 draw_center = tuple(np.round(centerDraw).astype(int))
@@ -462,6 +470,20 @@ def detect_pink_rectangle(sensor_data, camera, R, inMain):
 
     if not inMain :
         return center if 'center' in locals() else None
+    return None
+
+def check_closest_pink(sensor_data, camera_data):
+    '''function to check if the pink rectangle is the closest one'''
+    global center1, center2
+
+    if center1 is not None and center2 is not None:
+        dist1 = np.sqrt((sensor_data['x_global']-center1[0])**2 + (sensor_data['y_global']-center1[1])**2)
+        dist2 = np.sqrt((sensor_data['x_global']-center2[0])**2 + (sensor_data['y_global']-center2[1])**2)
+
+        if dist1 < dist2:
+            return center1
+        else:
+            return center2
     return None
 
 def noPinkTurn(sensor_data):
