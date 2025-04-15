@@ -16,7 +16,7 @@ import threading
 
 exp_num = 4                    # 0: Coordinate Transformation, 1: PID Tuning, 2: Kalman Filter, 3: Motion Planning, 4: Project
 control_style = 'path_planner'      # 'keyboard' or 'path_planner'
-rand_env = False                # Randomise the environment
+rand_env = True                # Randomise the environment
 
 # Global variables for handling threads
 latest_sensor_data = None
@@ -746,8 +746,8 @@ if __name__ == '__main__':
 
             # Update the drone status in simulation
             drone.step(motorPower, sensor_data)
-            RForDetectPink = np.zeros((3, 3))
-            assignment.detect_pink_rectangle(sensor_data, camera_data, RForDetectPink , True)
+            # RForDetectPink = np.zeros((3, 3))
+            # assignment.detect_pink_rectangle(sensor_data, camera_data, RForDetectPink , True)
     
     except KeyboardInterrupt:
         running = False

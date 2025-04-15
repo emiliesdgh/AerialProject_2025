@@ -374,8 +374,9 @@ def detect_pink_rectangle(sensor_data, camera, R, inMain):
     min_aera = 50
     contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_aera]
 
-    # distToCenterMin = 160
     centerXMin = -160
+    numCircle = 0
+    candidate_centers = []
 
     for cnt in contours:
         epsilon = 0.02 * cv2.arcLength(cnt, True)  # Approximation accuracy
@@ -385,101 +386,60 @@ def detect_pink_rectangle(sensor_data, camera, R, inMain):
             corners = approx.reshape(4, 2)  # Convert to a (4,2) array
 
             centerDraw = np.mean(corners, axis=0)
-           
-            if centerDraw[0] > centerXMin:# and centerDraw[0] >= -110:
-                if corners[0,0] < 7 and corners[1,0] < 7 and mission_state !=0:
+
+            if corners[0,0] < 7 and corners[1,0] < 7 and mission_state !=0:
                     continue
-                centerXMin = centerDraw[0] 
+                # centerXMin = centerDraw[0] 
+            else :
                 draw_center = tuple(np.round(centerDraw).astype(int))
                 cv2.circle(mask, draw_center, 5, 0, -1)
+                numCircle += 1
+
                 # change origin to the center of the image
                 corners = corners - WIDTH/2
                 # get center of the rectangle
                 center = np.mean(corners, axis=0)
+                # Save for later distance comparison
+                candidate_centers.append(center)
                 # sort the corners
                 corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
-            else: 
-                continue
-         # centerInWorld = R @ np.array([centerDraw[0], centerDraw[1], F_PIXEL])
-         # distance_to_center = np.sqrt((sensor_data['x_global']-centerInWorld[0])**2 + (sensor_data['y_global']-centerInWorld[1])**2)
-         # print("distance_to_center : ", distance_to_center)
-
-    # '''function to detect the pink rectangle in the camera frame'''
-    # global mission_state
-
-    # HSV_img = cv2.cvtColor(camera, cv2.COLOR_BGR2HSV)
-    # lower_pink = np.array([140, 50, 50])
-    # upper_pink = np.array([170, 255, 255])
-    # mask = cv2.inRange(HSV_img, lower_pink, upper_pink)
-
-    # contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    # min_aera = 50
-    # contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_aera]
-
-    # centerXMin = -160
-    # minDistance = 100
-    # finalCenter = None
-    # center = None
-    # centerDraw = None
-
-    # for cnt in contours:
-    #     epsilon = 0.02 * cv2.arcLength(cnt, True)  # Approximation accuracy
-    #     approx = cv2.approxPolyDP(cnt, epsilon, True)
-
-    #     if len(approx) == 4:  # Check if the detected shape has 4 corners
-
-    #         corners = approx.reshape(4, 2)
-    #         corners = corners - WIDTH/2
-
-    #         centerDraw = np.mean(corners, axis=0)
-
-    #         centersWorld = R @ np.array([centerDraw[0], centerDraw[1], F_PIXEL])
-    #         distanceToCenter = np.sqrt((sensor_data['x_global']-centersWorld[0])**2 + (sensor_data['y_global']-centersWorld[1])**2)
-
-    #         if distanceToCenter < minDistance :
-
-    #             minDistance = distanceToCenter
-    #             finalCenter = centerDraw
             
-    #             if finalCenter[0] > centerXMin:# and centerDraw[0] >= -110:
-    #                 # if the rectangle is too much on the left side, turn to center it a bit more
-    #                 if corners[0,0] < 7 and corners[1,0] < 7 and mission_state !=0: ## need to reshape corners ?
-    #                     continue
-                    
-    #                 centerXMin = finalCenter[0] 
-    #                 draw_center = tuple(np.round(finalCenter).astype(int))
-    #                 cv2.circle(mask, draw_center, 5, 0, -1)
+            # if centerDraw[0] > centerXMin:# and centerDraw[0] >= -110:
+            #     if corners[0,0] < 7 and corners[1,0] < 7 and mission_state !=0:
+            #         continue
+            #     centerXMin = centerDraw[0] 
+            #     draw_center = tuple(np.round(centerDraw).astype(int))
+            #     cv2.circle(mask, draw_center, 5, 0, -1)
+            #     numCircle += 1
 
-    #                 center = finalCenter
-    #                 # change origin to the center of the image
-    #                 # corners = corners - WIDTH/2
-    #                 # get center of the rectangle
-    #                 # center = np.mean(corners, axis=0)
-    #                 # centerDraw = np.mean(corners, axis=0)
-    #                 # sort the corners
-    #                 # corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
-    #                 # corners = corners[np.argsort(np.arctan2(corners[:, 1] - centerDraw[1], corners[:, 0] - centerDraw[0]))]
-    #             else: 
-    #                 continue
-            
-    #         # if centerDraw[0] > centerXMin:# and centerDraw[0] >= -110:
-    #         #     # if the rectangle is too much on the left side, turn to center it a bit more
-    #         #     if corners[0,0] < 7 and corners[1,0] < 7 and mission_state !=0:
-    #         #         continue
-    #         #     centerXMin = centerDraw[0] 
-    #         #     draw_center = tuple(np.round(centerDraw).astype(int))
-    #         #     cv2.circle(mask, draw_center, 5, 0, -1)
+            #     # change origin to the center of the image
+            #     corners = corners - WIDTH/2
+            #     # get center of the rectangle
+            #     center = np.mean(corners, axis=0)
+            #     # Save for later distance comparison
+            #     candidate_centers.append(center)
+            #     # sort the corners
+            #     corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
+            # else: 
+            #     continue
 
-    #         #     center = centerDraw
-    #         #     # change origin to the center of the image
-    #         #     # corners = corners - WIDTH/2
-    #         #     # get center of the rectangle
-    #         #     # center = np.mean(corners, axis=0)
-    #         #     # sort the corners
-    #         #     # corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
-    #         # else: 
-    #         #     continue
-
+    # print("numCircle : ", numCircle)
+    if numCircle > 1:
+        # find the closest center to the drone
+        ### pour la distance, risque d'avoir besoin de la rotation pour avoir le centre dans le frame world
+        distances = [np.sqrt((sensor_data['x_global']-center[0])**2 + (sensor_data['y_global']-center[1])**2) for center in candidate_centers]
+        # print("distances : ", distances)
+        min_index = np.argmin(distances)
+        # print("min_index : ", min_index)
+        center = candidate_centers[min_index]
+        # print("center : ", center)
+    
+    elif numCircle == 1:
+        center = candidate_centers[0]
+    else:
+        center = None
+    
+    # print("numCircle : ", numCircle, "candidate_centers : ", candidate_centers)
     if inMain :
         cv2.imshow('Mask2', mask)
         cv2.waitKey(1)
