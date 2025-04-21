@@ -171,7 +171,7 @@ def get_waypoint(sensor_data, camera):
         if target_index == 0:
             new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.05]
         elif target_index == 1:
-            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']-0.05]
+            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, 1.0, sensor_data['yaw']-0.05]
         elif target_index == 2:
             new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.05]
         elif target_index == 3:
