@@ -216,6 +216,7 @@ def get_waypoint(sensor_data, camera):
         R_initial = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
 
         center1 = detect_pink_rectangle(sensor_data, camera, R_initial, False)
+        # print("corners1 : ", corners1)
         # print("center1 : ", center1)
         if center1 is None:
             return noPinkTurn(sensor_data), waypoint
@@ -248,6 +249,8 @@ def get_waypoint(sensor_data, camera):
         R_second = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
 
         center2 = detect_pink_rectangle(sensor_data, camera, R_second, False)
+        # print("center2 : ", center2)
+        # print("corners2 : ", corners2)
         if center2 is None:
             return noPinkTurn(sensor_data), waypoint
 
@@ -256,9 +259,9 @@ def get_waypoint(sensor_data, camera):
         # TRIANGULATE
         waypoint, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
         # waypoint[:4] = np.round(waypoint[:4], 2)
+        print("alpha : ", alpha)
         
         # alpha = np.deg2rad(0)
-        # yaw = np.deg2rad(0)
 
         waypoint_set = True
 
@@ -270,31 +273,28 @@ def get_waypoint(sensor_data, camera):
         #     waypoint[0] = waypoint[0] - 0.15
         #     waypoint[1] = waypoint[1] - 0.15
 
+        ## essayer sans faire tourner le drone par rapport au waypoint et compter juste sur le if no pink
         if target_index == 0:
             waypoint1[:3] = waypoint
             waypoint1[3] = sensor_data['yaw']
-            yaw = 0
+            # yaw = 0
         elif target_index == 1:
             waypoint2[:3] = waypoint
             waypoint2[3] = sensor_data['yaw']
-            yaw = np.deg2rad(45)
-            # yaw = 0
+            # yaw = np.deg2rad(45)
         elif target_index == 2:
             waypoint3[:3] = waypoint
             waypoint3[3] = sensor_data['yaw']
-            yaw = np.deg2rad(90)
-            # yaw = 0
+            # yaw = np.deg2rad(90)
         elif target_index == 3:
             waypoint4[:3] = waypoint
             waypoint4[3] = sensor_data['yaw']
-            yaw = np.deg2rad(150)
-            # yaw = 0
+            # yaw = np.deg2rad(150)
         elif target_index == 4:
             waypoint5[:3] = waypoint
             waypoint5[3] = sensor_data['yaw']
             # yaw = np.deg2rad(180)
-            yaw = np.deg2rad(-90)
-            # yaw = 0
+            # yaw = np.deg2rad(-90)
 
 
     # GO TO WAYPOINT
@@ -313,7 +313,7 @@ def get_waypoint(sensor_data, camera):
             waypoint_set = False
             at_waypoint = False
 
-        control_command = [waypoint[0], waypoint[1], waypoint[2], alpha + yaw] #sensor_data['yaw']+yaw]
+        control_command = [waypoint[0], waypoint[1], waypoint[2], alpha]# + yaw] #sensor_data['yaw']+yaw]
 
     return control_command, waypoint
 
@@ -383,10 +383,9 @@ def detect_pink_rectangle(sensor_data, camera, R, inMain):
     min_aera = 50
     contours = [cnt for cnt in contours if cv2.contourArea(cnt) > min_aera]
 
-    centerXMin = -160
+    centerXMin = 10
     numCircle = 0
     candidate_centers = []
-    candidate_corners = []
     corners = None
 
     for cnt in contours:
@@ -395,71 +394,79 @@ def detect_pink_rectangle(sensor_data, camera, R, inMain):
 
         if len(approx) == 4:  # Check if the detected shape has 4 corners
             corners = approx.reshape(4, 2)  # Convert to a (4,2) array
+            # print("corners : ", corners)
 
             centerDraw = np.mean(corners, axis=0)
-            # print("corners : ", corners)
+            # corners = corners[np.argsort(np.arctan2(corners[:, 1] - centerDraw[1], corners[:, 0] - centerDraw[0]))]
+            # print("corners arranged : ", corners)
+            # print("corner 0 : ", corners[0,0])
+            # print("corner 1 : ", corners[1,0])
+
+            corners = corners[np.argsort(np.arctan2(corners[:, 1] - centerDraw[1], corners[:, 0] - centerDraw[0]))]
+            # print("corners arranged : ", corners)
+            # print("all corners : ", corners[:,0] > 7)
             test_pos_corners = corners[:,0] < 7
+            print("test_pos_corners : ", test_pos_corners)
+            print("test if : ", test_pos_corners[0] or test_pos_corners[1] or test_pos_corners[2] or test_pos_corners[3])
+            print("corners : ", corners)
+            # print("test_pos_corners all : ", test_pos_corners.all())
+            # print("all corners : ", corners[:,0] > 7)
 
-            # if (corners[0,0] < 7 and corners[1,0] < 7) and mission_state !=0:
-            # # # if test_pos_corners[0] or test_pos_corners[1] or test_pos_corners[2] or test_pos_corners[3]:
-            # # #         continue
-            # # #     # centerXMin = centerDraw[0] 
-            # # # else :
-            # # #     draw_center = tuple(np.round(centerDraw).astype(int))
-            # # #     cv2.circle(mask, draw_center, 5, 0, -1)
-            # # #     numCircle += 1
 
-            # # #     # change origin to the center of the image
-            # # #     corners = corners - WIDTH/2
-            # # #     # get center of the rectangle
-            # # #     center = np.mean(corners, axis=0)
-            # # #     # Save for later distance comparison
-            # # #     candidate_centers.append(center)
-            # # #     # sort the corners
-            # # #     corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
+            # if (corners[0,0] < 7 or corners[1,0] or corners[2,0] or corners[3,0] < 7) and mission_state !=0:
+            # if corners[0,0] < 7 and corners[3,0] < 7 and mission_state !=0:
+            # if test_pos_corners.all() and mission_state !=0:
+            if corners is not None and mission_state !=0:
+                if test_pos_corners[0] or test_pos_corners[1] or test_pos_corners[2] or test_pos_corners[3]: # and mission_state !=0:
+                        # print("pink rectangle too close to the edge")
+                        # print("corners[0,0] : ", corners[0,0])
+                        # print("corners[1,0] : ", corners[1,0])
+                        # print("corners[2,0] : ", corners[2,0])
+                        # print("corners[3,0] : ", corners[3,0])
+                        # center = None
+                        # continue
+                        return None
+                    # centerXMin = centerDraw[0] 
+                else :
+                # elif corners[:,0] > 7 and mission_state !=0:
+                    draw_center = tuple(np.round(centerDraw).astype(int))
+                    # print("we draw the center so center should not be none")
+                    cv2.circle(mask, draw_center, 5, 0, -1)
+                    numCircle += 1
 
-            draw_center = tuple(np.round(centerDraw).astype(int))
-            cv2.circle(mask, draw_center, 5, 0, -1)
-            numCircle += 1
-
-            # change origin to the center of the image
-            corners = corners - WIDTH/2
-            # get center of the rectangle
-            center = np.mean(corners, axis=0)
-            # Save for later distance comparison
-            candidate_centers.append(center)
-            
-            # sort the corners
-            corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
-            candidate_corners.append(corners)
+                    # change origin to the center of the image
+                    corners = corners - WIDTH/2
+                    # get center of the rectangle
+                    center = np.mean(corners, axis=0)
+                    # Save for later distance comparison
+                    candidate_centers.append(center)
+                    # sort the corners
+                    corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
+                # else:
+            #     continue
 
     if numCircle > 1:
         # find the closest center to the drone
-        ### pour la distance, risque d'avoir besoin de la rotation pour avoir le centre dans le frame world ###
+        ### pour la distance, risque d'avoir besoin de la rotation pour avoir le centre dans le frame world
         distances = [np.sqrt((sensor_data['x_global']-center[0])**2 + (sensor_data['y_global']-center[1])**2) for center in candidate_centers]
+        # print("distances : ", distances)
         min_index = np.argmin(distances)
-
+        # print("min_index : ", min_index)
         center = candidate_centers[min_index]
-        corners = candidate_corners[min_index]
-
-        test_pos_corners = corners[:,0] < -140
-
-        if test_pos_corners[0] or test_pos_corners[1] or test_pos_corners[2] or test_pos_corners[3]:
-            center = None
+        # print("center : ", center)
     
     elif numCircle == 1:
         center = candidate_centers[0]
-        if test_pos_corners[0] or test_pos_corners[1] or test_pos_corners[2] or test_pos_corners[3]:
-            center = None
-
     else:
         center = None
     
+    # print("numCircle : ", numCircle, "candidate_centers : ", candidate_centers)
     if inMain :
         cv2.imshow('Mask2', mask)
         cv2.waitKey(1)
 
     if not inMain :
+        # return corners, center if 'center' in locals() else None
         return center if 'center' in locals() else None
     return None
 
