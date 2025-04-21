@@ -2,9 +2,6 @@ import numpy as np
 import time
 import cv2
 
-# === Imports === #
-# from exercises.ex1_pid_control import quadrotor_controller as PID
-
 # === Constants === #
 WIDTH = 300
 FOV = 1.5  # radians
@@ -50,13 +47,6 @@ alpha = 0
 yaw = 0
 
 
-# PID states
-pid_integral = np.zeros(3)
-pid_previous_error = np.zeros(3)
-
-# === Class === #
-# PID_control = PID()
-
 ########### create function that analyses the center the detect pink rectangle returns 
 ########### and if there is several centers keep the closest one to the drone
 ########### so the pink function is just to detect if pink and if so return the return of this function
@@ -69,6 +59,8 @@ pid_previous_error = np.zeros(3)
 ##### compute position of center compared to center of image
 ## if on the left, move to the left and turn counterclockwise for second position
 ## if on the right, move to the right and turn clockwise for second position
+
+
 def get_command(sensor_data, camera_data, dt):
     #  # NOTE: Displaying the camera image with cv2.imshow() will throw an error because GUI operations should be performed in the main thread.
     # # If you want to display the camera image you can call it main.py.
@@ -87,28 +79,12 @@ def get_command(sensor_data, camera_data, dt):
         center1 = detect_pink_rectangle(sensor_data, camera_data, R, False)
         if center1 is not None:
             nopink = False
-            # print("Pink rectangle detected")
         else:
-            # print("No pink rectangle detected BEFORE GET_WAYPOINT")
             return noPinkTurn(sensor_data)
-    # === initialize the PID class === #
-    # if mission_state == 0:
-    #     PID_control = PID()
+
     #### verifier si y'a du rose dans la camera sinon faut tourner jusqu'à ce qu'il y'en ai
     if target_index < MAX_TARGETS:
         control_command, waypoint = get_waypoint(sensor_data, camera_data)
-
-    # # if target_index == MAX_TARGETS:
-
-    # #     if lap_count == 1:
-    # #         setpoints = np.array([waypoint1, waypoint2, waypoint3, waypoint4, waypoint5])
-    # #         print("setpoints : ", setpoints)
-    # #         print("First lap complete and waypoints set")
-    # #         lap_count += 1
-    # #     if lap_count > 1 and lap_count <= MAX_LAPS:
-    # #         control_command = trajectory_tracking(sensor_data, dt, setpoints, 0.1)
-    # #     # elif lap_count == 2:
-
 
         # When first lap is done, initialize setpoints
     if target_index == MAX_TARGETS and not start_timed:
@@ -127,21 +103,13 @@ def get_command(sensor_data, camera_data, dt):
 
     # Laps 2 and beyond
     if start_timed and lap_count <= MAX_LAPS:
-        # Follow setpoints using PID (you could also use minimum snap trajectory or similar)
-        # setpoints_array = [setpoints[i] for i in range(6)]
-        # timepoints = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]  # optional if using time-based
+
         control_command = trajectory_tracking(sensor_data, dt, setpoints, 0.1)#timepoints, setpoints_array, 0.15)
-        # print(help(PID.setpoint_to_pwm))
-        # motorPower = PID.setpoint_to_pwm(dt, setpoints, sensor_data)   
-        # print("Motor power: ", motorPower)
 
         # Check if lap is done
         if timer_done:
             lap_count += 1
-            # if lap_count == MAX_LAPS:
-            #     print("Mission complete. Hovering...")
-            #     control_command = [1.0, 4.0, sensor_data['z_global'], 0.0]#[sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']]
-            # else:
+
             if lap_count != MAX_LAPS:
                 print(f"Lap {lap_count} starting...")
                 timer_done = None
@@ -164,8 +132,6 @@ def trajectory_tracking(sensor_data, dt, setpoints, tol):#, repeat=False):
 
     if timer is not None:
         timer += dt
-
-    # end_point = setpoints[-1]
 
     if index_current_setpoint < len(setpoints):
         current_setpoint = setpoints[index_current_setpoint]
@@ -212,11 +178,9 @@ def get_waypoint(sensor_data, camera):
     if mission_state == 1:
         # time.sleep(2) # to diminue 
         initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
-
         R_initial = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
-
         center1 = detect_pink_rectangle(sensor_data, camera, R_initial, False)
-        # print("center1 : ", center1)
+
         if center1 is None:
             return noPinkTurn(sensor_data), waypoint
 
@@ -244,10 +208,9 @@ def get_waypoint(sensor_data, camera):
     # CAPTURE SECOND IMAGE + POSE
     if mission_state == 2 and moved_to_second_position:
         second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
-
         R_second = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
-
         center2 = detect_pink_rectangle(sensor_data, camera, R_second, False)
+
         if center2 is None:
             return noPinkTurn(sensor_data), waypoint
 
@@ -287,7 +250,7 @@ def get_waypoint(sensor_data, camera):
         elif target_index == 3:
             waypoint4[:3] = waypoint
             waypoint4[3] = sensor_data['yaw']
-            yaw = np.deg2rad(150)
+            yaw = np.deg2rad(180)
             # yaw = 0
         elif target_index == 4:
             waypoint5[:3] = waypoint
@@ -368,8 +331,6 @@ def B2W(roll, pitch, yaw):
     R = R_yaw @ R_pitch @ R_roll @ R_C2B
     return R
 
-
-
 def detect_pink_rectangle(sensor_data, camera, R, inMain):
 
     global mission_state
@@ -395,28 +356,9 @@ def detect_pink_rectangle(sensor_data, camera, R, inMain):
 
         if len(approx) == 4:  # Check if the detected shape has 4 corners
             corners = approx.reshape(4, 2)  # Convert to a (4,2) array
-
             centerDraw = np.mean(corners, axis=0)
-            # print("corners : ", corners)
+
             test_pos_corners = corners[:,0] < 7
-
-            # if (corners[0,0] < 7 and corners[1,0] < 7) and mission_state !=0:
-            # # # if test_pos_corners[0] or test_pos_corners[1] or test_pos_corners[2] or test_pos_corners[3]:
-            # # #         continue
-            # # #     # centerXMin = centerDraw[0] 
-            # # # else :
-            # # #     draw_center = tuple(np.round(centerDraw).astype(int))
-            # # #     cv2.circle(mask, draw_center, 5, 0, -1)
-            # # #     numCircle += 1
-
-            # # #     # change origin to the center of the image
-            # # #     corners = corners - WIDTH/2
-            # # #     # get center of the rectangle
-            # # #     center = np.mean(corners, axis=0)
-            # # #     # Save for later distance comparison
-            # # #     candidate_centers.append(center)
-            # # #     # sort the corners
-            # # #     corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
 
             draw_center = tuple(np.round(centerDraw).astype(int))
             cv2.circle(mask, draw_center, 5, 0, -1)
