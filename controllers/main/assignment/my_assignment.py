@@ -75,8 +75,7 @@ def get_command(sensor_data, camera_data, dt):
 
     # Get all Waypoints
     if nopink and mission_state != 0:
-        R = np.zeros((3, 3))
-        center1 = detect_pink_rectangle(sensor_data, camera_data, R, False)
+        center1 = detect_pink_rectangle(sensor_data, camera_data, False)
         if center1 is not None:
             nopink = False
         else:
@@ -98,37 +97,23 @@ def get_command(sensor_data, camera_data, dt):
         start_timed = True
         index_current_setpoint = 0
         timer = None
-        print("All waypoints acquired. Starting lap", lap_count)
+        # print("All waypoints acquired. Starting lap", lap_count)
         return setpoints[0][:]#[1.0, 4.0, sensor_data['z_global'], 0.0]
 
     # Laps 2 and beyond
     if start_timed and lap_count <= MAX_LAPS:
 
-        control_command = trajectory_tracking(sensor_data, dt, setpoints, 0.1)
-
-        # Check if lap is done
-        if timer_done:
-            lap_count += 1
-
-            # if lap_count != MAX_LAPS:
-            #     print("HHHERRREE")
-            #     print(f"Lap {lap_count} starting...")
-            #     timer_done = None
-            #     timer = None
-            #     index_current_setpoint = 0
-            #     control_command = setpoints[0]
+        # control_command = trajectory_tracking(sensor_data, setpoints, 0.1)
+        return trajectory_tracking(sensor_data, setpoints, 0.1)
 
     return control_command
 
-def trajectory_tracking(sensor_data, dt, setpoints, tol):
+def trajectory_tracking(sensor_data, setpoints, tol):
     global index_current_setpoint, timer, lap_count
 
     if index_current_setpoint == 0 and timer is None:
         timer = 0
-        print(f"Starting Lap {lap_count + 1}")
-
-    if timer is not None:
-        timer += dt
+        # print(f"Starting Lap {lap_count + 1}")
 
     if index_current_setpoint < len(setpoints):
         current_setpoint = setpoints[index_current_setpoint]
@@ -173,7 +158,7 @@ def get_waypoint(sensor_data, camera):
         # time.sleep(2) # to diminue 
         initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
         R_initial = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
-        center1 = detect_pink_rectangle(sensor_data, camera, R_initial, False)
+        center1 = detect_pink_rectangle(sensor_data, camera, False)
 
         if center1 is None:
             return noPinkTurn(sensor_data), waypoint
@@ -203,7 +188,7 @@ def get_waypoint(sensor_data, camera):
     if mission_state == 2 and moved_to_second_position:
         second_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
         R_second = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
-        center2 = detect_pink_rectangle(sensor_data, camera, R_second, False)
+        center2 = detect_pink_rectangle(sensor_data, camera, False)
 
         if center2 is None:
             return noPinkTurn(sensor_data), waypoint
@@ -326,7 +311,8 @@ def B2W(roll, pitch, yaw):
     R = R_yaw @ R_pitch @ R_roll @ R_C2B
     return R
 
-def detect_pink_rectangle(sensor_data, camera, R, inMain):
+# def detect_pink_rectangle(sensor_data, camera, R, inMain):
+def detect_pink_rectangle(sensor_data, camera, inMain):
 
     global mission_state
  
