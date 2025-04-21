@@ -70,6 +70,9 @@ yaw = 0
 ## if perpendicular, need to compute the angle of the rectangle
 ## if facing, need to compute the angle of the rectangle and add 90 degrees
 
+# ISSUES WHEN THERE IS 2 RECTANGLES ONE IN FRONT OF THE OTHER
+
+
 # tune the PID controller to have a better trajectory
 
 def get_command(sensor_data, camera_data, dt):
@@ -165,27 +168,27 @@ def get_waypoint(sensor_data, camera):
 
         mission_state = 2
 
-        # # if target_index == 0:
-        # #     new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.05]
-        # # elif target_index == 1:
-        # #     new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']-0.05]
-        # # elif target_index == 2:
-        # #     new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.05]
-        # # elif target_index == 3:
-        # #     new_pos = [initial_pos[0]+0.5, initial_pos[1]+0.75, initial_pos[2], sensor_data['yaw']+0.1]
-        # # elif target_index == 4:
-        # #     new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.75, initial_pos[2], sensor_data['yaw']+0.1]
-
         if target_index == 0:
-            new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, 1.0, sensor_data['yaw']+0.05]
+            new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.05]
         elif target_index == 1:
-            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, 1.0, sensor_data['yaw']-0.05]
+            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']-0.05]
         elif target_index == 2:
-            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, 1.0, sensor_data['yaw']+0.05]
+            new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, initial_pos[2], sensor_data['yaw']+0.05]
         elif target_index == 3:
-            new_pos = [initial_pos[0]+0.5, initial_pos[1]+0.75, 1.0, sensor_data['yaw']+0.1]
+            new_pos = [initial_pos[0]+0.5, initial_pos[1]+0.75, initial_pos[2], sensor_data['yaw']+0.1]
         elif target_index == 4:
-            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.75, 1.0, sensor_data['yaw']+0.1]
+            new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.75, initial_pos[2], sensor_data['yaw']+0.1]
+
+        # if target_index == 0:
+        #     new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, 1.0, sensor_data['yaw']+0.05]
+        # elif target_index == 1:
+        #     new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, 1.0, sensor_data['yaw']-0.05]
+        # elif target_index == 2:
+        #     new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, 1.0, sensor_data['yaw']+0.05]
+        # elif target_index == 3:
+        #     new_pos = [initial_pos[0]+0.5, initial_pos[1]+0.75, 1.0, sensor_data['yaw']+0.1]
+        # elif target_index == 4:
+        #     new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.75, 1.0, sensor_data['yaw']+0.1]
 
         control_command = new_pos
 
