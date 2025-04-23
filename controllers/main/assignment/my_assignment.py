@@ -8,7 +8,7 @@ FOV = 1.5  # radians
 F_PIXEL = WIDTH / (2 * np.tan(FOV / 2)) # = 161~
 
 MAX_TARGETS = 5
-MAX_LAPS = 3
+MAX_LAPS = 4
 
 # === Global Variables === #
 waypoint = np.array([0.0, 0.0, 1.0])
@@ -107,8 +107,8 @@ def get_command(sensor_data, camera_data, dt):
 
     # Laps 2 and beyond
     if start_timed and lap_count <= MAX_LAPS:
-
-        return trajectory_tracking(sensor_data, setpoints, 0.1)
+        # # return trajectory_tracking(sensor_data, setpoints, 0.1)
+        return trajectory_tracking(sensor_data, setpoints, 0.2)
 
     return control_command
 
@@ -212,6 +212,15 @@ def get_waypoint(sensor_data, camera):
         # TRIANGULATE
         waypoint, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
         # print("alpha : ", alpha)
+        ## To try to go a bit further than the waypoint
+        if waypoint[0] > sensor_data['x_global']:
+            waypoint[0] = waypoint[0] + 0.075
+        elif waypoint[0] < sensor_data['x_global']:
+            waypoint[0] = waypoint[0] - 0.075
+        if waypoint[1] > sensor_data['y_global']:
+            waypoint[1] = waypoint[1] + 0.075
+        elif waypoint[1] < sensor_data['y_global']:
+            waypoint[1] = waypoint[1] - 0.075
 
         waypoint_set = True
         
@@ -259,15 +268,15 @@ def get_waypoint(sensor_data, camera):
             # yaw = np.deg2rad(-90)
             # yaw = 0
         
-        ## To try to go a bit further than the waypoint
-        if waypoint[0] > sensor_data['x_global']:
-            waypoint[0] = waypoint[0] + 0.1
-        elif waypoint[0] < sensor_data['x_global']:
-            waypoint[0] = waypoint[0] - 0.1
-        if waypoint[1] > sensor_data['y_global']:
-            waypoint[1] = waypoint[1] + 0.1
-        elif waypoint[1] < sensor_data['y_global']:
-            waypoint[1] = waypoint[1] - 0.1
+        # ## To try to go a bit further than the waypoint
+        # if waypoint[0] > sensor_data['x_global']:
+        #     waypoint[0] = waypoint[0] + 0.1
+        # elif waypoint[0] < sensor_data['x_global']:
+        #     waypoint[0] = waypoint[0] - 0.1
+        # if waypoint[1] > sensor_data['y_global']:
+        #     waypoint[1] = waypoint[1] + 0.1
+        # elif waypoint[1] < sensor_data['y_global']:
+        #     waypoint[1] = waypoint[1] - 0.1
 
     # GO TO WAYPOINT
     if waypoint_set and not at_waypoint:
@@ -359,6 +368,7 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
     candidate_centers = []
     candidate_corners = []
     corners = None
+    centerXMin = -WIDTH
 
     for cnt in contours2:
         # print("Contour area: ", cv2.contourArea(cnt))
@@ -385,6 +395,33 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
             # sort the corners
             corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
             candidate_corners.append(corners)
+            # test_pos_corners = corners[:,0] < 15
+            test_pos_corners_side = corners[:,0] < -140
+            # test_pos_corners_up = corners[:,1] < -140 
+            # test_pos_corners_down = corners[:,1] > 10#140
+            # test_pos_corners_up_down = test_pos_corners_up + test_pos_corners_down
+            # print("test_pos_corners_up & down : ", test_pos_corners_up, test_pos_corners_down)
+            # print("test_pos_corners_up_down : ", test_pos_corners_up_down)
+            # print("test_pos_corners : ", test_pos_corners, corners)
+
+            if test_pos_corners_side[0] or test_pos_corners_side[1] or test_pos_corners_side[2] or test_pos_corners_side[3]:
+                # print("TRUE")
+                center = None
+                continue
+
+
+            # if centerDraw[0] > centerXMin:# and centerDraw[0] >= -110:
+            #      centerXMin = centerDraw[0] 
+            #      draw_center = tuple(np.round(centerDraw).astype(int))
+            #      cv2.circle(mask, draw_center, 5, 0, -1)
+            #      # change origin to the center of the image
+            #      corners = corners - WIDTH/2
+            #      # get center of the rectangle
+            #      center = np.mean(corners, axis=0)
+            #      # sort the corners
+            #      corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
+            # else: 
+            #      continue
 
     if numCircle > 1:
         # find the closest center to the drone
@@ -396,15 +433,15 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
         center = candidate_centers[min_index]
         corners = candidate_corners[min_index]
 
-        test_pos_corners = corners[:,0] < -140
+        test_pos_corners_side = corners[:,0] < -140
 
-        if test_pos_corners[0] or test_pos_corners[1] or test_pos_corners[2] or test_pos_corners[3]:
+        if test_pos_corners_side[0] or test_pos_corners_side[1] or test_pos_corners_side[2] or test_pos_corners_side[3]:
             center = None
     
     elif numCircle == 1:
         # center = None
         center = candidate_centers[0]
-        if test_pos_corners[0] or test_pos_corners[1] or test_pos_corners[2] or test_pos_corners[3]:
+        if test_pos_corners_side[0] or test_pos_corners_side[1] or test_pos_corners_side[2] or test_pos_corners_side[3]:
             center = None
 
     else:
