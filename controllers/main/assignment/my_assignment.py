@@ -18,7 +18,7 @@ moved_to_second_position = False
 waypoint_set = False
 at_waypoint = False
 nopink = True
-toHigh = True
+toHigh = 0
 
 mission_state = 0  # 0 = takeoff
 target_index = 0   # which waypoint is targeted (0 to 4)
@@ -46,6 +46,7 @@ R_initial = None
 R_second = None
 alpha = 0
 yaw = 0
+
 
 
 ########### create function that analyses the center the detect pink rectangle returns DONE
@@ -200,14 +201,18 @@ def get_waypoint(sensor_data, camera):
         # TRIANGULATE
         waypoint, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
 
-        if waypoint[0] > sensor_data['x_global']:
-            waypoint[0] = waypoint[0] + 0.05
-        elif waypoint[0] < sensor_data['x_global']:
-            waypoint[0] = waypoint[0] - 0.05
-        if waypoint[1] > sensor_data['y_global']:
-            waypoint[1] = waypoint[1] + 0.05
-        elif waypoint[1] < sensor_data['y_global']:
-            waypoint[1] = waypoint[1] - 0.05
+        if target_index != 2:
+            print("not 2nd gate")
+            if waypoint[0] > sensor_data['x_global']:
+                waypoint[0] = waypoint[0] + 0.069
+            elif waypoint[0] < sensor_data['x_global']:
+                waypoint[0] = waypoint[0] - 0.069
+
+            if waypoint[1] > sensor_data['y_global']:
+                waypoint[1] = waypoint[1] + 0.069
+            elif waypoint[1] < sensor_data['y_global']:
+                waypoint[1] = waypoint[1] - 0.069
+        
 
         waypoint_set = True
         
@@ -234,7 +239,15 @@ def get_waypoint(sensor_data, camera):
             setpoints[5][:3] = waypoint
             setpoints[5][3] = sensor_data['yaw']
 
-    if waypoint[2] > sensor_data['z_global'] + 0.2 and target_index == 0:
+    if waypoint[2] > sensor_data['z_global'] + 0.25 :
+            # print("toHigh ", toHigh)
+            # print("sensor_data['z_global'] ", sensor_data['z_global'])
+            # print("waypoint[2] ", waypoint[2])
+            # toHigh = toHigh + 1
+            # if toHigh > 20:
+            #     toHigh = 0
+            #     return [sensor_data['x_global'], sensor_data['y_global'], waypoint[2], sensor_data['yaw']+0.1], waypoint
+
             return [sensor_data['x_global'], sensor_data['y_global'], waypoint[2], sensor_data['yaw']], waypoint
     
     # GO TO WAYPOINT
@@ -326,7 +339,6 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
     centerXMin = -WIDTH
 
     for cnt in contours2:
-        # print("Contour area: ", cv2.contourArea(cnt))
         epsilon = 0.02 * cv2.arcLength(cnt, True)  # Approximation accuracy
         approx = cv2.approxPolyDP(cnt, epsilon, True)
 
@@ -334,7 +346,7 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
             corners = approx.reshape(4, 2)  # Convert to a (4,2) array
             centerDraw = np.mean(corners, axis=0)
 
-            test_pos_corners = corners[:,0] < 10
+            # test_pos_corners = corners[:,0] < 10
 
             draw_center = tuple(np.round(centerDraw).astype(int))
             cv2.circle(mask, draw_center, 5, 0, -1)
@@ -359,19 +371,39 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
 
     if numCircle > 1:
         distances = [np.sqrt((sensor_data['x_global']-center[0])**2 + (sensor_data['y_global']-center[1])**2) for center in candidate_centers]
+        
         min_index = np.argmin(distances)
         center = candidate_centers[min_index]
+        # center = centerDist
         corners = candidate_corners[min_index]
+        # print("numCircle > 1")
+
+        # most_right_index = np.argmax([corners[:, 0].max() for corners in candidate_corners])
+        # centerRight = candidate_centers[most_right_index]
+        # center = candidate_centers[most_right_index]
+        # corners = candidate_corners[most_right_index]
+        # print("center : ", center)
+        # if centerDist.all() == centerRight.all() :
+        #     center = centerRight
+        #     corners = candidate_corners[most_right_index]
+        #     print("issue1")
+        # else:
+        #     center = centerDist
+        #     corners = candidate_corners[min_index]
+        #     print("issue2")
 
         test_pos_corners_side = corners[:,0] < -140
 
         if test_pos_corners_side[0] or test_pos_corners_side[1] or test_pos_corners_side[2] or test_pos_corners_side[3]:
+            # print("issue5")
             center = None
     
     elif numCircle == 1:
         center = candidate_centers[0]
+        # print("issue3")
         if test_pos_corners_side[0] or test_pos_corners_side[1] or test_pos_corners_side[2] or test_pos_corners_side[3]:
             center = None
+            # print("issue4")
 
     else:
         center = None
