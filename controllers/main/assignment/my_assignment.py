@@ -18,6 +18,7 @@ moved_to_second_position = False
 waypoint_set = False
 at_waypoint = False
 nopink = True
+toHigh = True
 
 mission_state = 0  # 0 = takeoff
 target_index = 0   # which waypoint is targeted (0 to 4)
@@ -107,7 +108,6 @@ def get_command(sensor_data, camera_data, dt):
 
     # Laps 2 and beyond
     if start_timed and lap_count <= MAX_LAPS:
-        # # return trajectory_tracking(sensor_data, setpoints, 0.1)
         return trajectory_tracking(sensor_data, setpoints, 0.2)
 
     return control_command
@@ -141,7 +141,7 @@ def get_waypoint(sensor_data, camera):
     '''function to get the waypoint to go to'''
     global waypoint, waypoint1, waypoint2, waypoint3, waypoint4, waypoint5
     global control_command, mission_state, target_index, moved_to_second_position, waypoint_set, at_waypoint
-    global initial_pos, second_pos, new_pos, R_initial, R_second, center1, center2, alpha, yaw, setpoints
+    global initial_pos, second_pos, new_pos, R_initial, R_second, center1, center2, alpha, yaw, setpoints, toHigh
 
     # DONE WITH ALL TARGETS
     if target_index >= MAX_TARGETS:
@@ -158,7 +158,6 @@ def get_waypoint(sensor_data, camera):
 
     # CAPTURE FIRST IMAGE + POSE
     if mission_state == 1:
-        # time.sleep(2) # to diminue 
         initial_pos = np.array([sensor_data['x_global'], sensor_data['y_global'], sensor_data['z_global'], sensor_data['yaw']])
         R_initial = B2W(sensor_data['roll'], sensor_data['pitch'], sensor_data['yaw'])
         center1 = detect_pink_rectangle(sensor_data, camera, False)
@@ -178,17 +177,6 @@ def get_waypoint(sensor_data, camera):
             new_pos = [initial_pos[0]+0.5, initial_pos[1]+0.75, initial_pos[2], sensor_data['yaw']+0.1]
         elif target_index == 4:
             new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.75, initial_pos[2], sensor_data['yaw']+0.1]
-
-        # if target_index == 0:
-        #     new_pos = [initial_pos[0]-0.5, initial_pos[1]-0.5, 1.0, sensor_data['yaw']+0.05]
-        # elif target_index == 1:
-        #     new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, 1.0, sensor_data['yaw']-0.05]
-        # elif target_index == 2:
-        #     new_pos = [initial_pos[0]+0.5, initial_pos[1]-0.5, 1.0, sensor_data['yaw']+0.05]
-        # elif target_index == 3:
-        #     new_pos = [initial_pos[0]+0.5, initial_pos[1]+0.75, 1.0, sensor_data['yaw']+0.1]
-        # elif target_index == 4:
-        #     new_pos = [initial_pos[0]-0.5, initial_pos[1]+0.75, 1.0, sensor_data['yaw']+0.1]
 
         control_command = new_pos
 
@@ -211,73 +199,44 @@ def get_waypoint(sensor_data, camera):
 
         # TRIANGULATE
         waypoint, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
-        # print("alpha : ", alpha)
-        ## To try to go a bit further than the waypoint
+
         if waypoint[0] > sensor_data['x_global']:
-            waypoint[0] = waypoint[0] + 0.075
+            waypoint[0] = waypoint[0] + 0.05
         elif waypoint[0] < sensor_data['x_global']:
-            waypoint[0] = waypoint[0] - 0.075
+            waypoint[0] = waypoint[0] - 0.05
         if waypoint[1] > sensor_data['y_global']:
-            waypoint[1] = waypoint[1] + 0.075
+            waypoint[1] = waypoint[1] + 0.05
         elif waypoint[1] < sensor_data['y_global']:
-            waypoint[1] = waypoint[1] - 0.075
+            waypoint[1] = waypoint[1] - 0.05
 
         waypoint_set = True
         
         if target_index == 0:
-            # waypoint1[:3] = waypoint
-            # waypoint1[3] = sensor_data['yaw']
             setpoints[1][:3] = waypoint
             setpoints[1][3] = sensor_data['yaw']
             yaw = yaw + np.deg2rad(90)
-            # yaw = yaw - alpha
 
         elif target_index == 1:
-            # waypoint2[:3] = waypoint
-            # waypoint2[3] = sensor_data['yaw']
             setpoints[2][:3] = waypoint
             setpoints[2][3] = sensor_data['yaw']
-            # yaw = sensor_data['yaw'] - alpha
-            # yaw = np.deg2rad(45)
-            # yaw = 0
+
         elif target_index == 2:
-            # waypoint3[:3] = waypoint
-            # waypoint3[3] = sensor_data['yaw']
             setpoints[3][:3] = waypoint
             setpoints[3][3] = sensor_data['yaw']
             yaw = yaw + np.deg2rad(45)
-            # yaw = 0
-            # yaw = sensor_data['yaw'] - alpha #+ np.deg2rad(180)
 
-        elif target_index == 3:
-            # waypoint4[:3] = waypoint
-            # waypoint4[3] = sensor_data['yaw']
+        elif target_index == 3:        
             setpoints[4][:3] = waypoint
             setpoints[4][3] = sensor_data['yaw']
             yaw = yaw + np.deg2rad(45)
-            # yaw = np.deg2rad(180)
-            # yaw = 0
-            # yaw = sensor_data['yaw'] - alpha #+ np.deg2rad(45)
 
-        elif target_index == 4:
-            # waypoint5[:3] = waypoint
-            # waypoint5[3] = sensor_data['yaw']
+        elif target_index == 4:       
             setpoints[5][:3] = waypoint
             setpoints[5][3] = sensor_data['yaw']
-            # yaw = np.deg2rad(180)
-            # yaw = np.deg2rad(-90)
-            # yaw = 0
-        
-        # ## To try to go a bit further than the waypoint
-        # if waypoint[0] > sensor_data['x_global']:
-        #     waypoint[0] = waypoint[0] + 0.1
-        # elif waypoint[0] < sensor_data['x_global']:
-        #     waypoint[0] = waypoint[0] - 0.1
-        # if waypoint[1] > sensor_data['y_global']:
-        #     waypoint[1] = waypoint[1] + 0.1
-        # elif waypoint[1] < sensor_data['y_global']:
-        #     waypoint[1] = waypoint[1] - 0.1
 
+    if waypoint[2] > sensor_data['z_global'] + 0.2 and target_index == 0:
+            return [sensor_data['x_global'], sensor_data['y_global'], waypoint[2], sensor_data['yaw']], waypoint
+    
     # GO TO WAYPOINT
     if waypoint_set and not at_waypoint:
         dist = np.sqrt((sensor_data['x_global']-waypoint[0])**2 + (sensor_data['y_global']-waypoint[1])**2)
@@ -286,16 +245,13 @@ def get_waypoint(sensor_data, camera):
             at_waypoint = True
             time.sleep(2)
 
-            # print("waypoints : ", setpoints)
-
             mission_state = 1
             target_index += 1   # restart for next target
             moved_to_second_position = False
             waypoint_set = False
             at_waypoint = False
 
-        # control_command = [waypoint[0], waypoint[1], waypoint[2], yaw+0.1]# + yaw] #sensor_data['yaw']+yaw]
-        control_command = [waypoint[0], waypoint[1], waypoint[2], yaw]# + yaw] #sensor_data['yaw']+yaw]
+        control_command = [waypoint[0], waypoint[1], waypoint[2], yaw]
 
     return control_command, waypoint
 
@@ -359,7 +315,6 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
     mask = cv2.inRange(HSV_img, lower_pink, upper_pink)
  
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    # min_aera = 50
     min_aera = 10
     
     contours2 = [cnt for cnt in contours if cv2.contourArea(cnt) > min_aera]
@@ -395,41 +350,16 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
             # sort the corners
             corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
             candidate_corners.append(corners)
-            # test_pos_corners = corners[:,0] < 15
             test_pos_corners_side = corners[:,0] < -140
-            # test_pos_corners_up = corners[:,1] < -140 
-            # test_pos_corners_down = corners[:,1] > 10#140
-            # test_pos_corners_up_down = test_pos_corners_up + test_pos_corners_down
-            # print("test_pos_corners_up & down : ", test_pos_corners_up, test_pos_corners_down)
-            # print("test_pos_corners_up_down : ", test_pos_corners_up_down)
-            # print("test_pos_corners : ", test_pos_corners, corners)
 
             if test_pos_corners_side[0] or test_pos_corners_side[1] or test_pos_corners_side[2] or test_pos_corners_side[3]:
-                # print("TRUE")
                 center = None
                 continue
 
 
-            # if centerDraw[0] > centerXMin:# and centerDraw[0] >= -110:
-            #      centerXMin = centerDraw[0] 
-            #      draw_center = tuple(np.round(centerDraw).astype(int))
-            #      cv2.circle(mask, draw_center, 5, 0, -1)
-            #      # change origin to the center of the image
-            #      corners = corners - WIDTH/2
-            #      # get center of the rectangle
-            #      center = np.mean(corners, axis=0)
-            #      # sort the corners
-            #      corners = corners[np.argsort(np.arctan2(corners[:, 1] - center[1], corners[:, 0] - center[0]))]
-            # else: 
-            #      continue
-
     if numCircle > 1:
-        # find the closest center to the drone
-        ### pour la distance, risque d'avoir besoin de la rotation pour avoir le centre dans le frame world ###
         distances = [np.sqrt((sensor_data['x_global']-center[0])**2 + (sensor_data['y_global']-center[1])**2) for center in candidate_centers]
-        # print("distances : ", distances)
         min_index = np.argmin(distances)
-
         center = candidate_centers[min_index]
         corners = candidate_corners[min_index]
 
@@ -439,7 +369,6 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
             center = None
     
     elif numCircle == 1:
-        # center = None
         center = candidate_centers[0]
         if test_pos_corners_side[0] or test_pos_corners_side[1] or test_pos_corners_side[2] or test_pos_corners_side[3]:
             center = None
