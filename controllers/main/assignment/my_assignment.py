@@ -49,33 +49,7 @@ yaw = 0
 
 
 
-########### create function that analyses the center the detect pink rectangle returns DONE
-########### and if there is several centers keep the closest one to the drone DONE
-########### so the pink function is just to detect if pink and if so return the return of this function
-########### if more than 1 door in the image, take the closest one => calculate the distance
-
-######## change the fact that the drone turns that much especially for the first waypoint
-###### maybe doesnt even need to tale the cadre angle, juat turn when no pink
-###### dron maybe doesn't need to turn at all if there's a condition on the fact that is doesn't see pink it turns
-
-##### compute position of center compared to center of image
-## if on the left, move to the left and turn counterclockwise for second position
-## if on the right, move to the right and turn clockwise for second position
-
-
-
-
-######### === Comments to optimize robustness === #########
-
-# figure out how to have to correct angle for the drone to cross the pink rectangle
-## what is optimal ? facing the rectangle or perpendicular to it ?
-## if perpendicular, need to compute the angle of the rectangle
-## if facing, need to compute the angle of the rectangle and add 90 degrees
-
-# ISSUES WHEN THERE IS 2 RECTANGLES ONE IN FRONT OF THE OTHER
-
-
-# tune the PID controller to have a better trajectory
+# === Functions === #
 
 def get_command(sensor_data, camera_data, dt):
     #  # NOTE: Displaying the camera image with cv2.imshow() will throw an error because GUI operations should be performed in the main thread.
@@ -202,7 +176,7 @@ def get_waypoint(sensor_data, camera):
         waypoint, alpha = triangulate(center1, center2, initial_pos, second_pos, R_initial, R_second)
 
         if target_index != 2:
-            print("not 2nd gate")
+            # print("not 2nd gate")
             if waypoint[0] > sensor_data['x_global']:
                 waypoint[0] = waypoint[0] + 0.069
             elif waypoint[0] < sensor_data['x_global']:
@@ -212,6 +186,16 @@ def get_waypoint(sensor_data, camera):
                 waypoint[1] = waypoint[1] + 0.069
             elif waypoint[1] < sensor_data['y_global']:
                 waypoint[1] = waypoint[1] - 0.069
+        else:
+            if waypoint[0] > sensor_data['x_global']:
+                waypoint[0] = waypoint[0] + 0.01
+            elif waypoint[0] < sensor_data['x_global']:
+                waypoint[0] = waypoint[0] - 0.01
+
+            if waypoint[1] > sensor_data['y_global']:
+                waypoint[1] = waypoint[1] + 0.01
+            elif waypoint[1] < sensor_data['y_global']:
+                waypoint[1] = waypoint[1] - 0.01
         
 
         waypoint_set = True
@@ -240,14 +224,6 @@ def get_waypoint(sensor_data, camera):
             setpoints[5][3] = sensor_data['yaw']
 
     if waypoint[2] > sensor_data['z_global'] + 0.25 :
-            # print("toHigh ", toHigh)
-            # print("sensor_data['z_global'] ", sensor_data['z_global'])
-            # print("waypoint[2] ", waypoint[2])
-            # toHigh = toHigh + 1
-            # if toHigh > 20:
-            #     toHigh = 0
-            #     return [sensor_data['x_global'], sensor_data['y_global'], waypoint[2], sensor_data['yaw']+0.1], waypoint
-
             return [sensor_data['x_global'], sensor_data['y_global'], waypoint[2], sensor_data['yaw']], waypoint
     
     # GO TO WAYPOINT
@@ -336,6 +312,7 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
     candidate_centers = []
     candidate_corners = []
     corners = None
+    center = None
     centerXMin = -WIDTH
 
     for cnt in contours2:
@@ -346,7 +323,7 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
             corners = approx.reshape(4, 2)  # Convert to a (4,2) array
             centerDraw = np.mean(corners, axis=0)
 
-            # test_pos_corners = corners[:,0] < 10
+            test_pos_corners = corners[:,0] < 10
 
             draw_center = tuple(np.round(centerDraw).astype(int))
             cv2.circle(mask, draw_center, 5, 0, -1)
@@ -371,39 +348,24 @@ def detect_pink_rectangle(sensor_data, camera, inMain):
 
     if numCircle > 1:
         distances = [np.sqrt((sensor_data['x_global']-center[0])**2 + (sensor_data['y_global']-center[1])**2) for center in candidate_centers]
-        
+        # print("distances", distances)
         min_index = np.argmin(distances)
+        # print("min_index", min_index)
         center = candidate_centers[min_index]
-        # center = centerDist
         corners = candidate_corners[min_index]
-        # print("numCircle > 1")
-
-        # most_right_index = np.argmax([corners[:, 0].max() for corners in candidate_corners])
-        # centerRight = candidate_centers[most_right_index]
-        # center = candidate_centers[most_right_index]
-        # corners = candidate_corners[most_right_index]
-        # print("center : ", center)
-        # if centerDist.all() == centerRight.all() :
-        #     center = centerRight
-        #     corners = candidate_corners[most_right_index]
-        #     print("issue1")
-        # else:
-        #     center = centerDist
-        #     corners = candidate_corners[min_index]
-        #     print("issue2")
-
+ 
         test_pos_corners_side = corners[:,0] < -140
 
         if test_pos_corners_side[0] or test_pos_corners_side[1] or test_pos_corners_side[2] or test_pos_corners_side[3]:
-            # print("issue5")
+            # print("in test§_pos_corners_side")
             center = None
     
     elif numCircle == 1:
-        center = candidate_centers[0]
-        # print("issue3")
+        # print("numCircle == 1")
+        # center = candidate_centers[0]
+        # center = center
         if test_pos_corners_side[0] or test_pos_corners_side[1] or test_pos_corners_side[2] or test_pos_corners_side[3]:
             center = None
-            # print("issue4")
 
     else:
         center = None
